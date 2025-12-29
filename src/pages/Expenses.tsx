@@ -11,6 +11,8 @@ import {
   X,
   Settings,
   Repeat,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Table from '../components/ui/Table';
@@ -55,6 +57,8 @@ const Expenses: React.FC = () => {
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   // Refs
   const datePickerRef = useRef<HTMLDivElement>(null);
@@ -226,6 +230,39 @@ const Expenses: React.FC = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedExpenses.size === 0) return;
+    
+    // Delete all selected expenses
+    await Promise.all(
+      Array.from(selectedExpenses).map((id) => deleteExpense.mutateAsync(id))
+    );
+    
+    // Clear selection
+    setSelectedExpenses(new Set());
+    setShowBulkDeleteConfirm(false);
+  };
+
+  const handleSelectExpense = (expenseId: string) => {
+    setSelectedExpenses((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(expenseId)) {
+        newSet.delete(expenseId);
+      } else {
+        newSet.add(expenseId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedExpenses.size === filteredExpenses.length) {
+      setSelectedExpenses(new Set());
+    } else {
+      setSelectedExpenses(new Set(filteredExpenses.map((e) => e.id)));
+    }
+  };
+
   const propertyOptions = [
     { value: '', label: 'Propriété' },
     { value: 'general', label: 'Général' },
@@ -241,6 +278,40 @@ const Expenses: React.FC = () => {
 
   const columns = [
     {
+      key: 'select',
+      header: (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSelectAll();
+          }}
+          className="flex items-center justify-center"
+          title={selectedExpenses.size === filteredExpenses.length ? 'Désélectionner tout' : 'Sélectionner tout'}
+        >
+          {selectedExpenses.size === filteredExpenses.length && filteredExpenses.length > 0 ? (
+            <CheckSquare className="w-5 h-5 text-primary-600" />
+          ) : (
+            <Square className="w-5 h-5 text-gray-400" />
+          )}
+        </button>
+      ),
+      render: (expense: Expense) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSelectExpense(expense.id);
+          }}
+          className="flex items-center justify-center"
+        >
+          {selectedExpenses.has(expense.id) ? (
+            <CheckSquare className="w-5 h-5 text-primary-600" />
+          ) : (
+            <Square className="w-5 h-5 text-gray-400 hover:text-primary-600" />
+          )}
+        </button>
+      ),
+    },
+    {
       key: 'date',
       header: 'Date',
       sortable: true,
@@ -251,7 +322,12 @@ const Expenses: React.FC = () => {
       header: 'Description',
       render: (expense: Expense) => (
         <div className="max-w-xs">
-          <p className="font-medium text-gray-900 truncate">{expense.description}</p>
+          <p className="font-medium text-gray-900 truncate">
+            {expense.vendor 
+              ? `${expense.vendor} : ${expense.description}`
+              : expense.description
+            }
+          </p>
           <p className="text-xs text-gray-500">{getPropertyName(expense.propertyId)}</p>
         </div>
       ),
@@ -321,6 +397,17 @@ const Expenses: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && selectedExpenses.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-400"
+              title={`Supprimer ${selectedExpenses.size} dépense(s)`}
+            >
+              <Trash2 className="w-5 h-5" />
+              <span className="hidden sm:inline ml-1">{selectedExpenses.size}</span>
+            </Button>
+          )}
           {isAdmin && (
             <>
               <div className="relative" ref={exportMenuRef}>
@@ -613,6 +700,17 @@ const Expenses: React.FC = () => {
         onConfirm={handleDelete}
         title="Supprimer la dépense ?"
         message="Cette action est irréversible."
+        confirmText="Supprimer"
+        isLoading={deleteExpense.isPending}
+      />
+
+      {/* Bulk Delete confirmation */}
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Supprimer les dépenses sélectionnées ?"
+        message={`Êtes-vous sûr de vouloir supprimer ${selectedExpenses.size} dépense(s) ? Cette action est irréversible.`}
         confirmText="Supprimer"
         isLoading={deleteExpense.isPending}
       />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, ArrowUpCircle, ArrowDownCircle, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -8,22 +8,28 @@ import TextArea from '../components/ui/TextArea';
 import DatePicker from '../components/ui/DatePicker';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import {
   useCurrentBalance,
   useTransactions,
   useCreateTransaction,
+  useUpdateTransaction,
+  useDeleteTransaction,
   useIsBalanceLow,
 } from '../hooks/useMobileMoney';
-import { useCurrency } from '../store/useAppStore';
+import { useCurrency, useMode } from '../store/useAppStore';
 import { formatDate, formatForInput } from '../utils/dates';
 import type { MobileMoneyTransaction, TransferFormData } from '../types';
 
 const MobileMoney: React.FC = () => {
   const { formatAmount, currency, exchangeRate } = useCurrency();
+  const { isAdmin } = useMode();
 
   // State
   const [showTransfer, setShowTransfer] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<MobileMoneyTransaction | null>(null);
+  const [deletingTransaction, setDeletingTransaction] = useState<MobileMoneyTransaction | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('');
 
   // Queries
@@ -31,6 +37,8 @@ const MobileMoney: React.FC = () => {
   const { data: transactions, isLoading: loadingTransactions } = useTransactions();
   const { data: isLowBalance } = useIsBalanceLow();
   const createTransaction = useCreateTransaction();
+  const updateTransaction = useUpdateTransaction();
+  const deleteTransaction = useDeleteTransaction();
 
   const {
     register,
@@ -62,6 +70,38 @@ const MobileMoney: React.FC = () => {
     await createTransaction.mutateAsync(formData);
     setShowTransfer(false);
     reset();
+  };
+
+  const handleEditTransaction = (transaction: MobileMoneyTransaction) => {
+    if (transaction.type !== 'deposit') return; // Only allow editing deposits
+    setEditingTransaction(transaction);
+    reset({
+      type: transaction.type,
+      amountEUR: transaction.amountEUR,
+      amountFCFA: transaction.amountFCFA,
+      description: transaction.description,
+      date: formatForInput(transaction.date),
+      reference: transaction.reference || '',
+    });
+    setShowTransfer(true);
+  };
+
+  const handleUpdateTransaction = async (data: TransferFormData) => {
+    if (!editingTransaction) return;
+    const formData = {
+      ...data,
+      amountFCFA: data.amountFCFA || Math.round(data.amountEUR * exchangeRate),
+    };
+    await updateTransaction.mutateAsync({ id: editingTransaction.id, data: formData });
+    setShowTransfer(false);
+    setEditingTransaction(null);
+    reset();
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTransaction) return;
+    await deleteTransaction.mutateAsync(deletingTransaction.id);
+    setDeletingTransaction(null);
   };
 
   // Filter transactions
@@ -130,6 +170,40 @@ const MobileMoney: React.FC = () => {
         </span>
       ),
     },
+    {
+      key: 'actions',
+      header: '',
+      render: (t: MobileMoneyTransaction) => (
+        isAdmin && t.type === 'deposit' ? (
+          <div className="flex gap-1 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              className="p-2"
+              title="Modifier"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditTransaction(t);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-400"
+              title="Supprimer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeletingTransaction(t);
+              }}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : null
+      ),
+    },
   ];
 
   return (
@@ -146,41 +220,32 @@ const MobileMoney: React.FC = () => {
       </div>
 
       {/* Balance card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="md:col-span-2">
-          <CardBody className="py-8">
-            <div className="text-center">
-              <p className="text-sm text-gray-500 mb-2">Solde actuel</p>
-              <p className="text-4xl font-bold text-gray-900">
-                {formatAmount(balance?.balanceEUR || 0, balance?.balanceFCFA || 0)}
+      <Card>
+        <CardBody className="py-8">
+          <div className="text-center">
+            <p className="text-sm text-gray-500 mb-2">Solde actuel</p>
+            <p className="text-4xl font-bold text-gray-900">
+              {formatAmount(balance?.balanceEUR || 0, balance?.balanceFCFA || 0)}
+            </p>
+            {currency === 'EUR' && balance && (
+              <p className="text-lg text-gray-500 mt-1">
+                {balance.balanceFCFA.toLocaleString()} FCFA
               </p>
-              {currency === 'EUR' && balance && (
-                <p className="text-lg text-gray-500 mt-1">
-                  {balance.balanceFCFA.toLocaleString()} FCFA
-                </p>
-              )}
-              {currency === 'FCFA' && balance && (
-                <p className="text-lg text-gray-500 mt-1">
-                  {balance.balanceEUR.toFixed(2)} €
-                </p>
-              )}
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* Low balance alert */}
-        {isLowBalance && (
-          <Card className="border-warning-200 bg-warning-50">
-            <CardBody className="flex flex-col items-center justify-center text-center py-8">
-              <AlertTriangle className="w-10 h-10 text-warning-500 mb-2" />
-              <p className="font-medium text-warning-800">Solde bas</p>
-              <p className="text-sm text-warning-600 mt-1">
-                Pensez à ajouter des fonds
+            )}
+            {currency === 'FCFA' && balance && (
+              <p className="text-lg text-gray-500 mt-1">
+                {balance.balanceEUR.toFixed(2)} €
               </p>
-            </CardBody>
-          </Card>
-        )}
-      </div>
+            )}
+            {isLowBalance && (
+              <div className="mt-4 flex items-center justify-center gap-2 text-warning-600">
+                <AlertTriangle className="w-5 h-5" />
+                <p className="text-sm font-medium">Solde bas - Pensez à ajouter des fonds</p>
+              </div>
+            )}
+          </div>
+        </CardBody>
+      </Card>
 
       {/* Filters */}
       <Card>
@@ -212,14 +277,18 @@ const MobileMoney: React.FC = () => {
         />
       </Card>
 
-      {/* Add Transaction Modal */}
+      {/* Add/Edit Transaction Modal */}
       <Modal
         isOpen={showTransfer}
-        onClose={() => setShowTransfer(false)}
-        title="Nouvelle transaction"
+        onClose={() => {
+          setShowTransfer(false);
+          setEditingTransaction(null);
+          reset();
+        }}
+        title={editingTransaction ? "Modifier la transaction" : "Nouvelle transaction"}
         size="md"
       >
-        <form onSubmit={handleSubmit(handleAddTransaction)} className="space-y-4">
+        <form onSubmit={handleSubmit(editingTransaction ? handleUpdateTransaction : handleAddTransaction)} className="space-y-4">
           <Controller
             name="type"
             control={control}
@@ -228,6 +297,7 @@ const MobileMoney: React.FC = () => {
                 label="Type de transaction"
                 options={transactionTypeOptions}
                 {...field}
+                disabled={!!editingTransaction} // Disable type change when editing
               />
             )}
           />
@@ -297,12 +367,23 @@ const MobileMoney: React.FC = () => {
             >
               Annuler
             </Button>
-            <Button type="submit" isLoading={createTransaction.isPending}>
-              Enregistrer
+            <Button type="submit" isLoading={editingTransaction ? updateTransaction.isPending : createTransaction.isPending}>
+              {editingTransaction ? 'Mettre à jour' : 'Enregistrer'}
             </Button>
           </div>
         </form>
       </Modal>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        isOpen={!!deletingTransaction}
+        onClose={() => setDeletingTransaction(null)}
+        onConfirm={handleDelete}
+        title="Supprimer la transaction ?"
+        message={`Êtes-vous sûr de vouloir supprimer cette transaction de ${deletingTransaction ? formatAmount(deletingTransaction.amountEUR, deletingTransaction.amountFCFA) : ''} ? Cette action est irréversible et affectera le solde.`}
+        confirmText="Supprimer"
+        isLoading={deleteTransaction.isPending}
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import {
   getMobileMoneyTransactions,
   getCurrentBalance,
   createTransaction,
+  updateTransaction,
   deleteTransaction,
 } from '../services/mobileMoneyService';
 import type { TransferFormData } from '../types';
@@ -40,6 +41,24 @@ export function useCreateTransaction() {
     },
     onError: (err) => {
       error('Erreur', 'Impossible d\'effectuer la transaction.');
+      console.error(err);
+    },
+  });
+}
+
+export function useUpdateTransaction() {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+  const mode = useAppStore((state) => state.mode);
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: TransferFormData }) => updateTransaction(id, data, mode),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MOBILE_MONEY_QUERY_KEY });
+      success('Transaction modifiée', 'La transaction a été mise à jour.');
+    },
+    onError: (err) => {
+      error('Erreur', 'Impossible de modifier la transaction.');
       console.error(err);
     },
   });

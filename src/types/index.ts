@@ -22,6 +22,18 @@ export interface Property {
   basePriceFCFA: number;
   cleaningFeeEUR: number;
   cleaningFeeFCFA: number;
+  // Rent (separate from investment)
+  rentPriceEUR?: number;
+  rentPriceFCFA?: number;
+  // Investment fields
+  purchasePriceEUR?: number;
+  purchasePriceFCFA?: number;
+  travauxEUR?: number;
+  travauxFCFA?: number;
+  meublesEUR?: number;
+  meublesFCFA?: number;
+  equipementEUR?: number;
+  equipementFCFA?: number;
   status: PropertyStatus;
   photos: string[];
   createdAt: Date;
@@ -40,6 +52,18 @@ export interface PropertyFormData {
   basePriceFCFA: number;
   cleaningFeeEUR?: number;
   cleaningFeeFCFA?: number;
+  // Rent (separate from investment)
+  rentPriceEUR?: number;
+  rentPriceFCFA?: number;
+  // Investment fields
+  purchasePriceEUR?: number;
+  purchasePriceFCFA?: number;
+  travauxEUR?: number;
+  travauxFCFA?: number;
+  meublesEUR?: number;
+  meublesFCFA?: number;
+  equipementEUR?: number;
+  equipementFCFA?: number;
   status: PropertyStatus;
 }
 
@@ -267,6 +291,14 @@ export interface TaskFormData {
 export interface TaskComment {
   id: string;
   taskId: string;
+  content: string;
+  author: UserMode;
+  createdAt: Date;
+}
+
+export interface CustomerComment {
+  id: string;
+  customerId: string;
   content: string;
   author: UserMode;
   createdAt: Date;

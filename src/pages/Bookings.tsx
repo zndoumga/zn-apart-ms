@@ -12,6 +12,7 @@ import {
   CalendarRange,
   X,
   ChevronDown,
+  ClipboardCheck,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -323,6 +324,20 @@ const Bookings: React.FC = () => {
       header: '',
       render: (booking: Booking) => (
         <div className="flex gap-1 justify-end">
+          {booking.status === 'confirmed' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="p-2 border-emerald-300 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400"
+              title="Check-in"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewingBooking(booking);
+              }}
+            >
+              <ClipboardCheck className="w-4 h-4" />
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"

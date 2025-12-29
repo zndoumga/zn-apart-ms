@@ -144,6 +144,61 @@ export async function getTransactionByReference(reference: string): Promise<Mobi
 }
 
 /**
+ * Update a transaction
+ */
+export async function updateTransaction(
+  id: string,
+  formData: TransferFormData,
+  performedBy: UserMode
+): Promise<MobileMoneyTransaction> {
+  const currentTransaction = await supabase
+    .from(TABLES.MOBILE_MONEY)
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (currentTransaction.error) {
+    console.error('Error fetching transaction:', currentTransaction.error);
+    throw currentTransaction.error;
+  }
+
+  const updateData = {
+    type: formData.type,
+    amount_eur: formData.amountEUR,
+    amount_fcfa: formData.amountFCFA,
+    description: formData.description,
+    reference: formData.reference || null,
+    date: toISOString(formData.date),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from(TABLES.MOBILE_MONEY)
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating transaction:', error);
+    throw error;
+  }
+
+  const transaction = mapTransactionFromDB(data);
+
+  await logAction({
+    action: 'update',
+    entity: 'mobile_money',
+    entityId: id,
+    performedBy,
+    previousData: mapTransactionFromDB(currentTransaction.data),
+    newData: transaction,
+  });
+
+  return transaction;
+}
+
+/**
  * Delete a transaction
  */
 export async function deleteTransaction(

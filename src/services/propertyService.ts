@@ -65,6 +65,18 @@ export async function createProperty(
     base_price_fcfa: formData.basePriceFCFA,
     cleaning_fee_eur: formData.cleaningFeeEUR || 0,
     cleaning_fee_fcfa: formData.cleaningFeeFCFA || 0,
+    // Rent (separate from investment)
+    rent_price_eur: formData.rentPriceEUR || null,
+    rent_price_fcfa: formData.rentPriceFCFA || null,
+    // Investment fields
+    purchase_price_eur: formData.purchasePriceEUR || null,
+    purchase_price_fcfa: formData.purchasePriceFCFA || null,
+    travaux_eur: formData.travauxEUR || null,
+    travaux_fcfa: formData.travauxFCFA || null,
+    meubles_eur: formData.meublesEUR || null,
+    meubles_fcfa: formData.meublesFCFA || null,
+    equipement_eur: formData.equipementEUR || null,
+    equipement_fcfa: formData.equipementFCFA || null,
     status: formData.status,
     photos: photoUrls,
   };
@@ -141,6 +153,18 @@ export async function updateProperty(
   if (formData.basePriceFCFA !== undefined) updateData.base_price_fcfa = formData.basePriceFCFA;
   if (formData.cleaningFeeEUR !== undefined) updateData.cleaning_fee_eur = formData.cleaningFeeEUR;
   if (formData.cleaningFeeFCFA !== undefined) updateData.cleaning_fee_fcfa = formData.cleaningFeeFCFA;
+  // Rent (separate from investment)
+  if (formData.rentPriceEUR !== undefined) updateData.rent_price_eur = formData.rentPriceEUR || null;
+  if (formData.rentPriceFCFA !== undefined) updateData.rent_price_fcfa = formData.rentPriceFCFA || null;
+  // Investment fields
+  if (formData.purchasePriceEUR !== undefined) updateData.purchase_price_eur = formData.purchasePriceEUR || null;
+  if (formData.purchasePriceFCFA !== undefined) updateData.purchase_price_fcfa = formData.purchasePriceFCFA || null;
+  if (formData.travauxEUR !== undefined) updateData.travaux_eur = formData.travauxEUR || null;
+  if (formData.travauxFCFA !== undefined) updateData.travaux_fcfa = formData.travauxFCFA || null;
+  if (formData.meublesEUR !== undefined) updateData.meubles_eur = formData.meublesEUR || null;
+  if (formData.meublesFCFA !== undefined) updateData.meubles_fcfa = formData.meublesFCFA || null;
+  if (formData.equipementEUR !== undefined) updateData.equipement_eur = formData.equipementEUR || null;
+  if (formData.equipementFCFA !== undefined) updateData.equipement_fcfa = formData.equipementFCFA || null;
   if (formData.status !== undefined) updateData.status = formData.status;
 
   const { data, error } = await supabase
@@ -223,6 +247,18 @@ function mapPropertyFromDB(row: Record<string, unknown>): Property {
     basePriceFCFA: row.base_price_fcfa as number,
     cleaningFeeEUR: (row.cleaning_fee_eur as number) || 0,
     cleaningFeeFCFA: (row.cleaning_fee_fcfa as number) || 0,
+    // Rent (separate from investment)
+    rentPriceEUR: row.rent_price_eur ? parseFloat(row.rent_price_eur as string) : undefined,
+    rentPriceFCFA: row.rent_price_fcfa ? parseFloat(row.rent_price_fcfa as string) : undefined,
+    // Investment fields
+    purchasePriceEUR: row.purchase_price_eur ? parseFloat(row.purchase_price_eur as string) : undefined,
+    purchasePriceFCFA: row.purchase_price_fcfa ? parseFloat(row.purchase_price_fcfa as string) : undefined,
+    travauxEUR: row.travaux_eur ? parseFloat(row.travaux_eur as string) : undefined,
+    travauxFCFA: row.travaux_fcfa ? parseFloat(row.travaux_fcfa as string) : undefined,
+    meublesEUR: row.meubles_eur ? parseFloat(row.meubles_eur as string) : undefined,
+    meublesFCFA: row.meubles_fcfa ? parseFloat(row.meubles_fcfa as string) : undefined,
+    equipementEUR: row.equipement_eur ? parseFloat(row.equipement_eur as string) : undefined,
+    equipementFCFA: row.equipement_fcfa ? parseFloat(row.equipement_fcfa as string) : undefined,
     status: row.status as Property['status'],
     photos: (row.photos as string[]) || [],
     createdAt: new Date(row.created_at as string),

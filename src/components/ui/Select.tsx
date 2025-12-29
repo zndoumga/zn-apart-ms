@@ -39,7 +39,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           <select
             ref={ref}
             id={selectId}
-            value={value}
+            value={value || ''}
             onChange={handleChange}
             className={clsx(
               'block w-full rounded-lg border shadow-sm transition-colors duration-200 appearance-none',
@@ -54,7 +54,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {...props}
           >
             {placeholder && (
-              <option value="" disabled>
+              <option value="">
                 {placeholder}
               </option>
             )}

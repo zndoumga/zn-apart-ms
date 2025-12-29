@@ -18,6 +18,7 @@ export const TABLES = {
   PROPERTIES: 'properties',
   BOOKINGS: 'bookings',
   BOOKING_COMMENTS: 'booking_comments',
+  CUSTOMER_COMMENTS: 'customer_comments',
   EXPENSES: 'expenses',
   RECURRING_EXPENSES: 'recurring_expenses',
   CUSTOMERS: 'customers',

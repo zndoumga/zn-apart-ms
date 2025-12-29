@@ -29,6 +29,7 @@ interface BookingCalendarProps {
   onBookingClick?: (booking: Booking) => void;
   currentDate?: Date;
   onDateChange?: (date: Date) => void;
+  propertyFilter?: string;
 }
 
 // Use dark blue color matching the sidebar (primary-600)
@@ -46,10 +47,14 @@ const PROPERTY_COLORS = [
 const BookingCalendar: React.FC<BookingCalendarProps> = ({ 
   onBookingClick, 
   currentDate: externalCurrentDate,
-  onDateChange 
+  onDateChange,
+  propertyFilter: externalPropertyFilter
 }) => {
   const [internalCurrentDate, setInternalCurrentDate] = useState(new Date());
-  const [propertyFilter, setPropertyFilter] = useState<string>('');
+  const [internalPropertyFilter, setInternalPropertyFilter] = useState<string>('');
+  
+  // Use external property filter if provided, otherwise use internal state
+  const propertyFilter = externalPropertyFilter !== undefined ? externalPropertyFilter : internalPropertyFilter;
 
   // Use external date if provided, otherwise use internal state
   const currentDate = externalCurrentDate || internalCurrentDate;
@@ -174,24 +179,27 @@ const BookingCalendar: React.FC<BookingCalendarProps> = ({
           {format(currentDate, 'MMMM yyyy', { locale: fr })}
         </h2>
         <div className="flex items-center gap-3">
-          {/* Property filter dropdown */}
-          <div className="relative">
-            <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <select
-              value={propertyFilter}
-              onChange={(e) => setPropertyFilter(e.target.value)}
-              className="pl-9 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent cursor-pointer"
-            >
-              <option value="">Tous les appartements</option>
-              {properties?.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="h-6 w-px bg-gray-200" />
+          {/* Property filter dropdown - only show if not controlled externally */}
+          {externalPropertyFilter === undefined && (
+            <>
+              <div className="relative">
+                <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select
+                  value={propertyFilter}
+                  onChange={(e) => setInternalPropertyFilter(e.target.value)}
+                  className="pl-9 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent cursor-pointer"
+                >
+                  <option value="">Tous les appartements</option>
+                  {properties?.map((property) => (
+                    <option key={property.id} value={property.id}>
+                      {property.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="h-6 w-px bg-gray-200" />
+            </>
+          )}
 
           <Button variant="ghost" size="sm" onClick={prevMonth}>
             <ChevronLeft className="w-4 h-4" />

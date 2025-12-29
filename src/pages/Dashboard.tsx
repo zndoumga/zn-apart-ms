@@ -21,6 +21,7 @@ import { useUnresolvedRequestCount } from '../hooks/useRequests';
 import { useCurrentBalance, useIsBalanceLow } from '../hooks/useMobileMoney';
 import { useProperties } from '../hooks/useProperties';
 import type { Booking } from '../types';
+import Select from '../components/ui/Select';
 import {
   calculateTotalRevenue,
   calculateTotalExpenses,
@@ -39,6 +40,9 @@ const Dashboard: React.FC = () => {
   // Month state - shared between calendar and KPIs
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   
+  // Property filter state - affects all metrics
+  const [selectedProperty, setSelectedProperty] = useState<string>('');
+  
   // Booking details modal state
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
 
@@ -51,18 +55,38 @@ const Dashboard: React.FC = () => {
   const { data: balance } = useCurrentBalance();
   const { data: isLowBalance } = useIsBalanceLow();
 
-  // Calculate metrics based on selected month
+  // Filter bookings and expenses by property if selected
+  const filteredBookings = React.useMemo(() => {
+    if (!bookings) return [];
+    if (!selectedProperty) return bookings;
+    return bookings.filter(b => b.propertyId === selectedProperty);
+  }, [bookings, selectedProperty]);
+
+  const filteredExpenses = React.useMemo(() => {
+    if (!expenses) return [];
+    if (!selectedProperty) return expenses;
+    return expenses.filter(e => e.propertyId === selectedProperty);
+  }, [expenses, selectedProperty]);
+
+  // Filter properties for occupancy calculation
+  const filteredProperties = React.useMemo(() => {
+    if (!properties) return [];
+    if (!selectedProperty) return properties.filter(p => p.status === 'active');
+    return properties.filter(p => p.id === selectedProperty && p.status === 'active');
+  }, [properties, selectedProperty]);
+
+  // Calculate metrics based on selected month and property
   const selectedMonthStart = startOfMonth(selectedMonth);
   const selectedMonthEnd = endOfMonth(selectedMonth);
   const lastMonthStart = startOfMonth(subMonths(selectedMonth, 1));
   const lastMonthEnd = endOfMonth(subMonths(selectedMonth, 1));
 
-  const selectedMonthRevenue = bookings
-    ? calculateTotalRevenue(bookings, selectedMonthStart, selectedMonthEnd)
+  const selectedMonthRevenue = filteredBookings
+    ? calculateTotalRevenue(filteredBookings, selectedMonthStart, selectedMonthEnd)
     : { EUR: 0, FCFA: 0 };
 
-  const lastMonthRevenue = bookings
-    ? calculateTotalRevenue(bookings, lastMonthStart, lastMonthEnd)
+  const lastMonthRevenue = filteredBookings
+    ? calculateTotalRevenue(filteredBookings, lastMonthStart, lastMonthEnd)
     : { EUR: 0, FCFA: 0 };
 
   const revenueChange = calculatePercentageChange(
@@ -70,25 +94,25 @@ const Dashboard: React.FC = () => {
     lastMonthRevenue.EUR
   );
 
-  const selectedMonthExpenses = expenses
-    ? calculateTotalExpenses(expenses, selectedMonthStart, selectedMonthEnd)
+  const selectedMonthExpenses = filteredExpenses
+    ? calculateTotalExpenses(filteredExpenses, selectedMonthStart, selectedMonthEnd)
     : { EUR: 0, FCFA: 0 };
 
   // Occupancy for selected month
-  const monthOccupancy = bookings && properties
+  const monthOccupancy = filteredBookings && filteredProperties
     ? {
-        rate: calculateOccupancyRate(bookings, properties, selectedMonthStart, selectedMonthEnd),
-        total: properties.filter(p => p.status === 'active').length,
+        rate: calculateOccupancyRate(filteredBookings, filteredProperties, selectedMonthStart, selectedMonthEnd),
+        total: filteredProperties.length,
       }
     : { total: 0, rate: 0 };
 
   // Nights booked and average night price for selected month
-  const nightsBooked = bookings
-    ? calculateNightsBooked(bookings, selectedMonthStart, selectedMonthEnd)
+  const nightsBooked = filteredBookings
+    ? calculateNightsBooked(filteredBookings, selectedMonthStart, selectedMonthEnd)
     : 0;
 
-  const averageNightPrice = bookings
-    ? calculateAverageNightPrice(bookings, selectedMonthStart, selectedMonthEnd)
+  const averageNightPrice = filteredBookings
+    ? calculateAverageNightPrice(filteredBookings, selectedMonthStart, selectedMonthEnd)
     : { EUR: 0, FCFA: 0 };
 
   // Helper function to get property by ID
@@ -119,18 +143,33 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const propertyOptions = [
+    { value: '', label: 'Toutes les propriétés' },
+    ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
+  ];
+
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Vue d'ensemble
-        </h1>
-        <p className="text-gray-600 mt-1">
-          {isAdmin
-            ? "Vue d'ensemble de votre activité"
-            : 'Bienvenue ! Voici votre résumé du jour.'}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Vue d'ensemble
+          </h1>
+          <p className="text-gray-600 mt-1">
+            {isAdmin
+              ? "Vue d'ensemble de votre activité"
+              : 'Bienvenue ! Voici votre résumé du jour.'}
+          </p>
+        </div>
+        <div className="w-64">
+          <Select
+            options={propertyOptions}
+            value={selectedProperty}
+            onChange={setSelectedProperty}
+            placeholder="Sélectionner une propriété"
+          />
+        </div>
       </div>
 
       {/* Stats cards - Row 1: Financial metrics (4 cards) */}
@@ -250,6 +289,7 @@ const Dashboard: React.FC = () => {
               currentDate={selectedMonth}
               onDateChange={setSelectedMonth}
               onBookingClick={handleViewBooking}
+              propertyFilter={selectedProperty}
             />
           ) : (
             <Card>
@@ -261,6 +301,7 @@ const Dashboard: React.FC = () => {
                   currentDate={selectedMonth}
                   onDateChange={setSelectedMonth}
                   onBookingClick={handleViewBooking}
+                  propertyFilter={selectedProperty}
                 />
               </CardBody>
             </Card>

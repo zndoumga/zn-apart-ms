@@ -7,8 +7,10 @@ import {
   deleteCustomer,
   setCustomerVIP,
 } from '../services/customerService';
+import { getBookingsByCustomer } from '../services/bookingService';
 import type { Customer, CustomerFormData } from '../types';
 import { useAppStore, useToast } from '../store/useAppStore';
+import { differenceInDays } from 'date-fns';
 
 export const CUSTOMERS_QUERY_KEY = ['customers'];
 
@@ -135,13 +137,82 @@ export function useCustomerWithStats(id: string | undefined) {
       const customer = await getCustomer(id);
       if (!customer) return null;
 
-      // Return customer with stats from the customer record
+      // Fetch actual bookings for this customer to calculate real stats
+      // First try by customer_id
+      let bookings = await getBookingsByCustomer(id);
+      
+      console.log(`[Customer Stats] Customer ID: ${id}, Name: ${customer.name}, Email: ${customer.email}`);
+      console.log(`[Customer Stats] Bookings by customer_id: ${bookings.length}`);
+      
+      // If no bookings found by customer_id, try matching by email or name
+      if (bookings.length === 0 && (customer.email || customer.name)) {
+        const { supabase, TABLES } = await import('../services/supabase');
+        const { mapBookingFromDB } = await import('../services/bookingService');
+        
+        let query = supabase
+          .from(TABLES.BOOKINGS)
+          .select('*')
+          .neq('is_deleted', true);
+        
+        // Build OR conditions for matching
+        const conditions: string[] = [];
+        
+        // Match by email if available
+        if (customer.email) {
+          conditions.push(`guest_email.eq.${customer.email}`);
+        }
+        
+        // Also try matching by name (case-insensitive, partial match)
+        if (customer.name) {
+          // Try exact match first
+          conditions.push(`guest_name.ilike.${customer.name}`);
+          // Also try partial match
+          conditions.push(`guest_name.ilike.%${customer.name}%`);
+        }
+        
+        // Add customer_id as fallback
+        conditions.push(`customer_id.eq.${id}`);
+        
+        if (conditions.length > 0) {
+          query = query.or(conditions.join(','));
+        }
+        
+        const { data, error } = await query.order('check_in', { ascending: false });
+        
+        console.log(`[Customer Stats] Bookings by email/name: ${data?.length || 0}, Error:`, error);
+        
+        if (!error && data) {
+          bookings = data.map(mapBookingFromDB);
+          console.log(`[Customer Stats] Matched bookings:`, bookings.map(b => ({ id: b.id, guestName: b.guestName, guestEmail: b.guestEmail, totalPriceEUR: b.totalPriceEUR })));
+        }
+      }
+      
+      console.log(`[Customer Stats] Total bookings found: ${bookings.length}`);
+      console.log(`[Customer Stats] Total revenue: ${bookings.reduce((sum, b) => sum + b.totalPriceEUR, 0)}`);
+      
+      // Calculate stats from actual bookings
+      const totalBookings = bookings.length;
+      const totalRevenue = bookings.reduce((sum, b) => sum + b.totalPriceEUR, 0);
+      
+      // Calculate average stay duration
+      let totalNights = 0;
+      bookings.forEach((booking) => {
+        const nights = differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn));
+        totalNights += nights;
+      });
+      const avgStayDuration = totalBookings > 0 ? totalNights / totalBookings : 0;
+      
+      // Get last stay date
+      const lastStayDate = bookings.length > 0 
+        ? new Date(bookings[0].checkIn) // Already sorted by checkIn desc
+        : null;
+
       return {
         customer,
-        totalBookings: customer.totalBookings || 0,
-        totalRevenue: customer.totalSpentEUR || 0,
-        avgStayDuration: customer.totalBookings > 0 ? 3.5 : 0, // Placeholder - would need booking data
-        lastStayDate: null, // Would need to fetch last booking
+        totalBookings,
+        totalRevenue,
+        avgStayDuration,
+        lastStayDate,
       };
     },
     enabled: !!id,

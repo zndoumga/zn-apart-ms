@@ -54,6 +54,75 @@ const COUNTRIES = [
   { value: 'OTHER', label: 'Autre' },
 ];
 
+const COUNTRY_CODES = [
+  { value: '+237', label: '+237 (CM)', country: 'CM' },
+  { value: '+33', label: '+33 (FR)', country: 'FR' },
+  { value: '+1', label: '+1 (US/CA)', country: 'US' },
+  { value: '+44', label: '+44 (GB)', country: 'GB' },
+  { value: '+49', label: '+49 (DE)', country: 'DE' },
+  { value: '+32', label: '+32 (BE)', country: 'BE' },
+  { value: '+41', label: '+41 (CH)', country: 'CH' },
+  { value: '+221', label: '+221 (SN)', country: 'SN' },
+  { value: '+225', label: '+225 (CI)', country: 'CI' },
+  { value: '+241', label: '+241 (GA)', country: 'GA' },
+  { value: '+242', label: '+242 (CG)', country: 'CG' },
+  { value: '+243', label: '+243 (CD)', country: 'CD' },
+  { value: '+234', label: '+234 (NG)', country: 'NG' },
+  { value: '+233', label: '+233 (GH)', country: 'GH' },
+  { value: '+212', label: '+212 (MA)', country: 'MA' },
+  { value: '+213', label: '+213 (DZ)', country: 'DZ' },
+  { value: '+216', label: '+216 (TN)', country: 'TN' },
+  { value: '+20', label: '+20 (EG)', country: 'EG' },
+  { value: '+27', label: '+27 (ZA)', country: 'ZA' },
+  { value: '+254', label: '+254 (KE)', country: 'KE' },
+  { value: '+250', label: '+250 (RW)', country: 'RW' },
+  { value: '+256', label: '+256 (UG)', country: 'UG' },
+  { value: '+255', label: '+255 (TZ)', country: 'TZ' },
+  { value: '+251', label: '+251 (ET)', country: 'ET' },
+  { value: '+7', label: '+7 (RU)', country: 'RU' },
+  { value: '+86', label: '+86 (CN)', country: 'CN' },
+  { value: '+91', label: '+91 (IN)', country: 'IN' },
+  { value: '+81', label: '+81 (JP)', country: 'JP' },
+  { value: '+82', label: '+82 (KR)', country: 'KR' },
+  { value: '+61', label: '+61 (AU)', country: 'AU' },
+  { value: '+55', label: '+55 (BR)', country: 'BR' },
+  { value: '+52', label: '+52 (MX)', country: 'MX' },
+  { value: '+39', label: '+39 (IT)', country: 'IT' },
+  { value: '+34', label: '+34 (ES)', country: 'ES' },
+  { value: '+31', label: '+31 (NL)', country: 'NL' },
+  { value: '+46', label: '+46 (SE)', country: 'SE' },
+  { value: '+47', label: '+47 (NO)', country: 'NO' },
+  { value: '+45', label: '+45 (DK)', country: 'DK' },
+  { value: '+358', label: '+358 (FI)', country: 'FI' },
+  { value: '+351', label: '+351 (PT)', country: 'PT' },
+  { value: '+30', label: '+30 (GR)', country: 'GR' },
+  { value: '+48', label: '+48 (PL)', country: 'PL' },
+  { value: '+40', label: '+40 (RO)', country: 'RO' },
+  { value: '+420', label: '+420 (CZ)', country: 'CZ' },
+  { value: '+36', label: '+36 (HU)', country: 'HU' },
+  { value: '+353', label: '+353 (IE)', country: 'IE' },
+  { value: '+351', label: '+351 (PT)', country: 'PT' },
+  { value: '+380', label: '+380 (UA)', country: 'UA' },
+  { value: '+90', label: '+90 (TR)', country: 'TR' },
+  { value: '+971', label: '+971 (AE)', country: 'AE' },
+  { value: '+966', label: '+966 (SA)', country: 'SA' },
+  { value: '+974', label: '+974 (QA)', country: 'QA' },
+  { value: '+965', label: '+965 (KW)', country: 'KW' },
+  { value: '+973', label: '+973 (BH)', country: 'BH' },
+  { value: '+968', label: '+968 (OM)', country: 'OM' },
+  { value: '+961', label: '+961 (LB)', country: 'LB' },
+  { value: '+962', label: '+962 (JO)', country: 'JO' },
+  { value: '+972', label: '+972 (IL)', country: 'IL' },
+  { value: '+60', label: '+60 (MY)', country: 'MY' },
+  { value: '+65', label: '+65 (SG)', country: 'SG' },
+  { value: '+66', label: '+66 (TH)', country: 'TH' },
+  { value: '+84', label: '+84 (VN)', country: 'VN' },
+  { value: '+62', label: '+62 (ID)', country: 'ID' },
+  { value: '+63', label: '+63 (PH)', country: 'PH' },
+  { value: '+64', label: '+64 (NZ)', country: 'NZ' },
+  { value: '+27', label: '+27 (ZA)', country: 'ZA' },
+];
+
 const getCountryLabel = (code: string) => {
   return COUNTRIES.find(c => c.value === code)?.label || code;
 };
@@ -72,6 +141,26 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(showFormDirectly);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [countryCode, setCountryCode] = useState<string>('+237');
+  
+  // Extract country code from existing phone number if present
+  useEffect(() => {
+    const existingPhone = customer?.phone || booking.guestPhone || '';
+    if (existingPhone) {
+      // Try to find matching country code
+      const matchedCode = COUNTRY_CODES.find(code => existingPhone.startsWith(code.value));
+      if (matchedCode) {
+        setCountryCode(matchedCode.value);
+      }
+    } else if (customer?.nationality) {
+      // Try to match country code based on nationality
+      const matchedCode = COUNTRY_CODES.find(code => code.country === customer.nationality);
+      if (matchedCode) {
+        setCountryCode(matchedCode.value);
+      }
+    }
+  }, [customer, booking.guestPhone]);
+
   const [formData, setFormData] = useState<CheckInFormData>({
     guestName: customer?.name || booking.guestName,
     email: customer?.email || booking.guestEmail || '',
@@ -113,6 +202,17 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
       idNumber: customer?.idNumber || '',
       checkInNotes: booking.checkInNotes || '',
     });
+    
+    // Reset country code
+    const existingPhone = customer?.phone || booking.guestPhone || '';
+    if (existingPhone) {
+      const matchedCode = COUNTRY_CODES.find(code => existingPhone.startsWith(code.value));
+      if (matchedCode) {
+        setCountryCode(matchedCode.value);
+      }
+    } else {
+      setCountryCode('+237');
+    }
     setIdFile(null);
     setIdPreview(customer?.idDocumentUrl || null);
     setSignatureDataUrl(customer?.signatureUrl || null);
@@ -139,8 +239,16 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
       return;
     }
 
+    // Combine country code with phone number
+    const phoneWithCode = formData.phone 
+      ? (formData.phone.startsWith('+') ? formData.phone : `${countryCode}${formData.phone}`)
+      : '';
+
     await processCheckIn.mutateAsync({
-      checkInData: formData,
+      checkInData: {
+        ...formData,
+        phone: phoneWithCode,
+      },
       idFile,
       signatureDataUrl,
     });
@@ -441,12 +549,42 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
             onChange={(e) => handleInputChange('email', e.target.value)}
             leftIcon={<Mail className="w-4 h-4" />}
           />
-          <Input
-            label="Téléphone"
-            value={formData.phone}
-            onChange={(e) => handleInputChange('phone', e.target.value)}
-            leftIcon={<Phone className="w-4 h-4" />}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Téléphone
+            </label>
+            <div className="flex gap-2">
+              <div className="w-32 flex-shrink-0">
+                <Select
+                  options={COUNTRY_CODES}
+                  value={countryCode}
+                  onChange={(value) => {
+                    setCountryCode(value);
+                    // If phone already has a country code, remove it and update
+                    if (formData.phone && formData.phone.startsWith('+')) {
+                      const phoneWithoutCode = formData.phone.replace(/^\+\d{1,4}\s?/, '');
+                      handleInputChange('phone', phoneWithoutCode);
+                    }
+                  }}
+                  className="text-sm"
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  value={formData.phone.startsWith('+') 
+                    ? formData.phone.replace(/^\+\d{1,4}\s?/, '') 
+                    : formData.phone}
+                  onChange={(e) => {
+                    // Remove any existing country code from input
+                    const phoneValue = e.target.value.replace(/^\+\d{1,4}\s?/, '');
+                    handleInputChange('phone', phoneValue);
+                  }}
+                  leftIcon={<Phone className="w-4 h-4" />}
+                  placeholder="6 12 34 56 78"
+                />
+              </div>
+            </div>
+          </div>
           <Input
             label="Date de naissance"
             type="date"
@@ -461,8 +599,12 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
           <Select
             label="Nationalité"
             options={COUNTRIES}
-            value={formData.nationality}
-            onChange={(value) => handleInputChange('nationality', value)}
+            value={formData.nationality || ''}
+            onChange={(value) => {
+              console.log('Nationality changed:', value);
+              handleInputChange('nationality', value);
+            }}
+            placeholder="Sélectionner une nationalité"
             required
           />
           <Select
@@ -470,6 +612,7 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
             options={COUNTRIES}
             value={formData.countryOfResidence || ''}
             onChange={(value) => handleInputChange('countryOfResidence', value)}
+            placeholder="Sélectionner un pays"
           />
         </div>
 
@@ -486,8 +629,11 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
           <Select
             label="Type de pièce d'identité"
             options={ID_TYPES}
-            value={formData.idType}
-            onChange={(value) => handleInputChange('idType', value)}
+            value={formData.idType || 'passport'}
+            onChange={(value) => {
+              console.log('ID Type changed:', value);
+              handleInputChange('idType', value);
+            }}
             required
           />
           <Input
@@ -575,7 +721,16 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
         {/* Submit Button */}
         <div className="flex justify-end pt-4 border-t border-blue-200">
           <button
-            onClick={handleSubmit}
+            onClick={() => {
+              console.log('Form validation:', {
+                guestName: formData.guestName,
+                nationality: formData.nationality,
+                idType: formData.idType,
+                idNumber: formData.idNumber,
+                allValid: !!(formData.guestName && formData.nationality && formData.idType && formData.idNumber)
+              });
+              handleSubmit();
+            }}
             disabled={
               !formData.guestName ||
               !formData.nationality ||

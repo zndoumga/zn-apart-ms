@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Search, Users, Mail, Phone, Globe, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Plus, Search, Users, Mail, Phone, Globe, Download, Pencil, Trash2, ArrowUpDown, Filter, MessageSquare, Send, Calendar, MapPin, User, Clock, Tag, FileText } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Checkbox from '../components/ui/Checkbox';
 import { Card, CardBody } from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
+import CustomerDetailsModal from '../components/customers/CustomerDetailsModal';
 import {
   useCustomers,
   useCreateCustomer,
@@ -19,27 +20,49 @@ import {
   useDeleteCustomer,
   useCustomerWithStats,
 } from '../hooks/useCustomers';
-import { useCurrency } from '../store/useAppStore';
-import { formatDate } from '../utils/dates';
+import { useCustomerComments, useAddCustomerComment, useDeleteCustomerComment } from '../hooks/useCustomerComments';
+import { useBookings } from '../hooks/useBookings';
+import { useProperties } from '../hooks/useProperties';
+import { useCurrency, useMode } from '../store/useAppStore';
+import { formatDate, formatRelativeTime } from '../utils/dates';
 import { exportCustomersToCSV } from '../utils/export';
-import type { Customer, CustomerFormData } from '../types';
+import type { Customer, CustomerFormData, CustomerComment, Booking } from '../types';
+import { format, differenceInDays } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const Customers: React.FC = () => {
   const { formatAmount } = useCurrency();
+  const { isAdmin } = useMode();
 
   // State
   const [search, setSearch] = useState('');
   const [vipFilter, setVipFilter] = useState<string>('');
+  const [sortField, setSortField] = useState<'name' | 'date'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Queries
   const { data: customers, isLoading } = useCustomers({
     search,
   });
   const { data: customerDetails } = useCustomerWithStats(viewingCustomerId || undefined);
+  const { data: allBookings } = useBookings();
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
@@ -119,7 +142,17 @@ const Customers: React.FC = () => {
     }
   };
 
-  const getStatusBadge = (customer: Customer) => {
+  const formatPhoneNumber = (phone: string) => {
+  if (!phone) return phone;
+  // If phone starts with +, add space after country code (typically 1-4 digits after +)
+  if (phone.startsWith('+')) {
+    // Match country code (1-4 digits) and add space after it
+    return phone.replace(/^(\+\d{1,4})(\d)/, '$1 $2');
+  }
+  return phone;
+};
+
+const getStatusBadge = (customer: Customer) => {
     if (customer.isVIP) {
       return <Badge variant="success">VIP</Badge>;
     }
@@ -135,15 +168,77 @@ const Customers: React.FC = () => {
     { value: 'regular', label: 'Non-VIP' },
   ];
 
-  // Filter customers
-  const filteredCustomers = React.useMemo(() => {
+  // Filter and sort customers
+  const filteredCustomers = useMemo(() => {
     if (!customers) return [];
-    return customers.filter((customer) => {
+    
+    // Filter
+    let filtered = customers.filter((customer) => {
+      // Search filter
+      if (search) {
+        const searchLower = search.toLowerCase();
+        const matchesSearch = 
+          customer.name.toLowerCase().includes(searchLower) ||
+          customer.email?.toLowerCase().includes(searchLower) ||
+          customer.phone?.toLowerCase().includes(searchLower) ||
+          customer.nationality?.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+      
+      // VIP filter
       if (vipFilter === 'vip' && !customer.isVIP) return false;
       if (vipFilter === 'regular' && customer.isVIP) return false;
       return true;
     });
-  }, [customers, vipFilter]);
+
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+          break;
+        case 'date':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return filtered;
+  }, [customers, search, vipFilter, sortField, sortDirection]);
+
+  const handleSortClick = (field: 'name' | 'date') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Calculate most common booking source for each customer
+  const getMostCommonSource = (customerId: string) => {
+    const bookings = allBookings?.filter((b: Booking) => b.customerId === customerId) || [];
+    if (bookings.length === 0) return null;
+    const sourceCounts: Record<string, number> = {};
+    bookings.forEach((booking: Booking) => {
+      sourceCounts[booking.source] = (sourceCounts[booking.source] || 0) + 1;
+    });
+    const sortedSources = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
+    return sortedSources.length > 0 ? sortedSources[0][0] : null;
+  };
+
+  const getSourceLabel = (source: string | null) => {
+    if (!source) return '-';
+    const labels: Record<string, string> = {
+      airbnb: 'Airbnb',
+      booking: 'Booking.com',
+      direct: 'Direct',
+      other: 'Autre',
+    };
+    return labels[source] || source;
+  };
 
   const columns = [
     {
@@ -172,7 +267,7 @@ const Customers: React.FC = () => {
           {customer.phone && (
             <div className="flex items-center gap-1 text-gray-600">
               <Phone className="w-3 h-3" />
-              <span>{customer.phone}</span>
+              <span>{formatPhoneNumber(customer.phone)}</span>
             </div>
           )}
         </div>
@@ -191,6 +286,18 @@ const Customers: React.FC = () => {
       ),
     },
     {
+      key: 'channel',
+      header: 'Canal',
+      render: (customer: Customer) => {
+        const source = getMostCommonSource(customer.id);
+        return (
+          <Badge variant="gray" size="sm">
+            {getSourceLabel(source)}
+          </Badge>
+        );
+      },
+    },
+    {
       key: 'createdAt',
       header: 'Ajouté le',
       render: (customer: Customer) => formatDate(customer.createdAt),
@@ -202,23 +309,27 @@ const Customers: React.FC = () => {
         <div className="flex gap-2 justify-end">
           <Button
             size="sm"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              setViewingCustomerId(customer.id);
-            }}
-          >
-            Voir
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
+            variant="outline"
+            className="p-2"
+            title="Modifier"
             onClick={(e) => {
               e.stopPropagation();
               handleOpenEdit(customer);
             }}
           >
-            Modifier
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-400"
+            title="Supprimer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeletingCustomer(customer);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       ),
@@ -316,45 +427,120 @@ const Customers: React.FC = () => {
           <p className="text-gray-600 mt-1">{filteredCustomers?.length || 0} client(s)</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              if (filteredCustomers && filteredCustomers.length > 0) {
-                const stats: Record<string, { bookings: number; revenue: number }> = {};
-                filteredCustomers.forEach((c) => {
-                  stats[c.id] = { bookings: c.totalBookings, revenue: c.totalSpentEUR };
-                });
-                exportCustomersToCSV(filteredCustomers, stats);
-              }
-            }}
-            leftIcon={<Download className="w-4 h-4" />}
+          <div className="relative" ref={exportMenuRef}>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowExportMenu(!showExportMenu)} 
+              className="p-2"
+              title="Exporter"
+            >
+              <Download className="w-5 h-5" />
+            </Button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 min-w-[120px]">
+                <button
+                  onClick={() => {
+                    if (filteredCustomers && filteredCustomers.length > 0) {
+                      const stats: Record<string, { bookings: number; revenue: number }> = {};
+                      filteredCustomers.forEach((c) => {
+                        stats[c.id] = { bookings: c.totalBookings, revenue: c.totalSpentEUR };
+                      });
+                      exportCustomersToCSV(filteredCustomers, stats);
+                      setShowExportMenu(false);
+                    }
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  CSV
+                </button>
+              </div>
+            )}
+          </div>
+          <Button 
+            onClick={handleOpenCreate} 
+            variant="outline"
+            className="p-2"
+            title="Nouveau client"
           >
-            Exporter
-          </Button>
-          <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
-            Nouveau client
+            <Plus className="w-5 h-5" />
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardBody>
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Rechercher par nom, email, téléphone..."
+      {/* Compact Filter Bar */}
+      <Card className="overflow-visible">
+        <CardBody className="py-3 overflow-visible">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Filter icon + label */}
+            <div className="flex items-center gap-2 text-gray-500">
+              <Filter className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">Filtres</span>
+            </div>
+
+            {/* Search - compact */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                leftIcon={<Search className="w-4 h-4" />}
+                className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg w-32 sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
-            <Select
-              options={vipOptions}
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+
+            {/* VIP filter dropdown */}
+            <select
               value={vipFilter}
-              onChange={setVipFilter}
-              className="w-48"
-            />
+              onChange={(e) => setVipFilter(e.target.value)}
+              className={`px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                vipFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+              }`}
+            >
+              {vipOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+
+            {/* Spacer to push sort buttons to the right */}
+            <div className="flex-1" />
+
+            {/* Sort buttons */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 font-medium">Tri:</span>
+              <div className="inline-flex bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => handleSortClick('name')}
+                  className={`px-3 py-1.5 text-sm flex items-center gap-1 transition-colors rounded-l-md ${
+                    sortField === 'name' 
+                      ? 'bg-gray-800 text-white' 
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Alphabétique
+                  {sortField === 'name' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSortClick('date')}
+                  className={`px-3 py-1.5 text-sm flex items-center gap-1 transition-colors border-l border-gray-200 rounded-r-md ${
+                    sortField === 'date' 
+                      ? 'bg-gray-800 text-white' 
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Date
+                  {sortField === 'date' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </CardBody>
       </Card>
@@ -396,113 +582,32 @@ const Customers: React.FC = () => {
         <CustomerForm />
       </Modal>
 
-      {/* View Customer Modal */}
-      <Modal
+      <CustomerDetailsModal
+        customerId={viewingCustomerId}
+        customer={customerDetails?.customer || null}
+        customerStats={customerDetails ? {
+          totalBookings: customerDetails.totalBookings,
+          totalRevenue: customerDetails.totalRevenue,
+          avgStayDuration: customerDetails.avgStayDuration,
+          lastStayDate: customerDetails.lastStayDate,
+        } : null}
         isOpen={!!viewingCustomerId}
         onClose={() => setViewingCustomerId(null)}
-        title="Détails du client"
-        size="lg"
-      >
-        {customerDetails?.customer && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {customerDetails.customer.name}
-                </h3>
-                {getStatusBadge(customerDetails.customer)}
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  handleOpenEdit(customerDetails.customer!);
-                  setViewingCustomerId(null);
-                }}
-              >
-                Modifier
-              </Button>
-            </div>
-
-            {/* Contact info */}
-            <div className="grid grid-cols-2 gap-4">
-              {customerDetails.customer.email && (
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  <span>{customerDetails.customer.email}</span>
-                </div>
-              )}
-              {customerDetails.customer.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  <span>{customerDetails.customer.phone}</span>
-                </div>
-              )}
-              {customerDetails.customer.nationality && (
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-gray-400" />
-                  <span>{customerDetails.customer.nationality}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
-              <Card>
-                <CardBody className="text-center">
-                  <p className="text-2xl font-bold text-primary-600">
-                    {customerDetails.totalBookings}
-                  </p>
-                  <p className="text-sm text-gray-500">Réservations</p>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody className="text-center">
-                  <p className="text-2xl font-bold text-success-600">
-                    {formatAmount(customerDetails.totalRevenue, customerDetails.totalRevenue * 656)}
-                  </p>
-                  <p className="text-sm text-gray-500">Revenu total</p>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody className="text-center">
-                  <p className="text-2xl font-bold text-gray-900">
-                    {customerDetails.avgStayDuration.toFixed(1)}
-                  </p>
-                  <p className="text-sm text-gray-500">Nuits moyennes</p>
-                </CardBody>
-              </Card>
-            </div>
-
-            {/* Notes */}
-            {customerDetails.customer.notes && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-1">Notes</h4>
-                <p className="text-gray-600">{customerDetails.customer.notes}</p>
-              </div>
-            )}
-
-            {/* Tags */}
-            {customerDetails.customer.tags && customerDetails.customer.tags.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-1">Tags</h4>
-                <div className="flex gap-2 flex-wrap">
-                  {customerDetails.customer.tags.map((tag) => (
-                    <Badge key={tag} variant="gray">{tag}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Last stay */}
-            {customerDetails.lastStayDate && (
-              <p className="text-sm text-gray-500">
-                Dernier séjour: {formatDate(customerDetails.lastStayDate)}
-              </p>
-            )}
-          </div>
-        )}
-      </Modal>
+        onEdit={() => {
+          if (customerDetails?.customer) {
+            handleOpenEdit(customerDetails.customer);
+            setViewingCustomerId(null);
+          }
+        }}
+        onDelete={() => {
+          if (customerDetails?.customer) {
+            setDeletingCustomer(customerDetails.customer);
+            setViewingCustomerId(null);
+          }
+        }}
+        isAdmin={isAdmin}
+        formatAmount={formatAmount}
+      />
 
       {/* Delete confirmation */}
       <ConfirmDialog
