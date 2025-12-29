@@ -138,15 +138,23 @@ export const useCurrency = () => {
   
   const formatAmount = (amountEUR: number, amountFCFA: number) => {
     if (currency === 'EUR') {
-      return new Intl.NumberFormat('fr-FR', {
+      const formatted = new Intl.NumberFormat('fr-FR', {
         style: 'currency',
         currency: 'EUR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
       }).format(amountEUR);
+      // Replace space/non-breaking space thousand separators with dot
+      // Format is typically "1 200 €" (without decimals)
+      // We want "1.200€" (dot for thousands, no space before €)
+      let result = formatted.replace(/(\d)[\s\u00A0](\d)/g, '$1.$2'); // Replace spaces between digits
+      result = result.replace(/[\s\u00A0]+€/, '€'); // Remove space before €
+      return result;
     }
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'decimal',
-      maximumFractionDigits: 0,
-    }).format(amountFCFA) + ' FCFA';
+    // For FCFA: round up to nearest 25 and use dot as thousand separator
+    const rounded = Math.ceil(amountFCFA / 25) * 25;
+    const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${formatted} FCFA`;
   };
   
   const convertToFCFA = (amountEUR: number) => Math.round(amountEUR * exchangeRate);

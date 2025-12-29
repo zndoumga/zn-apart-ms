@@ -39,15 +39,17 @@ const UpcomingCheckIns: React.FC = () => {
         actions={
           <Link
             to="/bookings"
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1.5 transition-colors"
           >
             Voir tout
             <ArrowRight className="w-4 h-4" />
           </Link>
         }
       >
-        <h3 className="text-lg font-semibold text-gray-900">Arrivées à venir</h3>
-        <p className="text-sm text-gray-500">3 prochaines réservations</p>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Arrivées à venir</h3>
+          <p className="text-sm text-gray-500 mt-0.5">3 prochaines réservations</p>
+        </div>
       </CardHeader>
       <CardBody noPadding>
         {!bookings || bookings.length === 0 ? (
@@ -62,32 +64,32 @@ const UpcomingCheckIns: React.FC = () => {
               <Link
                 key={booking.id}
                 to={`/bookings/${booking.id}`}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50 transition-colors"
               >
-                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary-100 flex flex-col items-center justify-center">
-                  <span className="text-xs text-primary-600 font-medium">
+                <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-indigo-50 flex flex-col items-center justify-center border border-indigo-100">
+                  <span className="text-xs text-indigo-600 font-semibold">
                     {formatDateShort(booking.checkIn).split(' ')[1]}
                   </span>
-                  <span className="text-lg font-bold text-primary-700">
+                  <span className="text-lg font-bold text-indigo-700">
                     {formatDateShort(booking.checkIn).split(' ')[0]}
                   </span>
                 </div>
                 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
                     {booking.guestName}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="text-xs text-gray-500 truncate mt-0.5">
                     {getPropertyName(booking.propertyId)}
                   </p>
                 </div>
                 
                 <div className="flex-shrink-0 text-right">
-                  <div className="flex items-center gap-1 text-gray-500 text-xs">
-                    <Users className="w-3 h-3" />
+                  <div className="flex items-center gap-1 text-gray-500 text-xs mb-1">
+                    <Users className="w-3.5 h-3.5" />
                     <span>{booking.guests}</span>
                   </div>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-700">
                     {calculateNights(booking.checkIn, booking.checkOut)} nuits
                   </p>
                 </div>

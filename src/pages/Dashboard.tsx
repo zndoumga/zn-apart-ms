@@ -149,14 +149,14 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Vue d'ensemble
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600 text-base">
             {isAdmin
               ? "Vue d'ensemble de votre activité"
               : 'Bienvenue ! Voici votre résumé du jour.'}
@@ -173,7 +173,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats cards - Row 1: Financial metrics (4 cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* 1. Income (Revenue) */}
         <StatsCard
           title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
@@ -232,7 +232,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats cards - Row 2: Operational metrics (5 cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* 5. Nights booked */}
         <StatsCard
           title="Nuits réservées"
@@ -330,26 +330,26 @@ const Dashboard: React.FC = () => {
       {!isAdmin && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card hover onClick={() => window.location.href = '/bookings/new'}>
-            <CardBody className="text-center py-8">
-              <Calendar className="w-8 h-8 text-primary-600 mx-auto mb-3" />
-              <h3 className="font-medium text-gray-900">Nouvelle réservation</h3>
-              <p className="text-sm text-gray-500 mt-1">Ajouter une arrivée</p>
+            <CardBody className="text-center py-10">
+              <Calendar className="w-10 h-10 text-indigo-600 mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 text-base">Nouvelle réservation</h3>
+              <p className="text-sm text-gray-500 mt-1.5">Ajouter une arrivée</p>
             </CardBody>
           </Card>
 
           <Card hover onClick={() => window.location.href = '/expenses/new'}>
-            <CardBody className="text-center py-8">
-              <DollarSign className="w-8 h-8 text-success-600 mx-auto mb-3" />
-              <h3 className="font-medium text-gray-900">Nouvelle dépense</h3>
-              <p className="text-sm text-gray-500 mt-1">Enregistrer un achat</p>
+            <CardBody className="text-center py-10">
+              <DollarSign className="w-10 h-10 text-emerald-600 mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 text-base">Nouvelle dépense</h3>
+              <p className="text-sm text-gray-500 mt-1.5">Enregistrer un achat</p>
             </CardBody>
           </Card>
 
           <Card hover onClick={() => window.location.href = '/requests/new'}>
-            <CardBody className="text-center py-8">
-              <AlertCircle className="w-8 h-8 text-warning-600 mx-auto mb-3" />
-              <h3 className="font-medium text-gray-900">Nouvelle demande</h3>
-              <p className="text-sm text-gray-500 mt-1">Soumettre une demande</p>
+            <CardBody className="text-center py-10">
+              <AlertCircle className="w-10 h-10 text-amber-600 mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 text-base">Nouvelle demande</h3>
+              <p className="text-sm text-gray-500 mt-1.5">Soumettre une demande</p>
             </CardBody>
           </Card>
         </div>

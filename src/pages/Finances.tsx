@@ -8,11 +8,15 @@ import {
   BarChart3,
   CalendarRange,
   X,
+  Moon,
 } from 'lucide-react';
 import { useCurrency } from '../store/useAppStore';
+import { roundFCFAToNearest25, formatFCFAWithSeparator } from '../utils/currency';
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   PieChart,
@@ -24,6 +28,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  LabelList,
 } from 'recharts';
 import Select from '../components/ui/Select';
 import DatePicker from '../components/ui/DatePicker';
@@ -57,18 +62,69 @@ import {
 import { fr } from 'date-fns/locale';
 
 const CHART_COLORS = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#06b6d4',
-  '#84cc16',
+  '#6366f1', // indigo-500
+  '#10b981', // emerald-500
+  '#f59e0b', // amber-500
+  '#ef4444', // red-500
+  '#8b5cf6', // violet-500
+  '#ec4899', // pink-500
+  '#06b6d4', // cyan-500
+  '#84cc16', // lime-500
 ];
+
+// Channel-specific colors
+const getChannelColor = (channel: string): string => {
+  const channelLower = channel.toLowerCase();
+  if (channelLower === 'airbnb') {
+    return '#FF5A5F'; // Airbnb brand color (coral red)
+  } else if (channelLower === 'booking') {
+    return '#003580'; // Booking.com brand color (dark blue)
+  } else if (channelLower === 'direct') {
+    return '#000000'; // Black for direct
+  }
+  return '#6366f1'; // Default indigo for other channels
+};
+
+// Format number with K notation for FCFA axis
+const formatAxisLabel = (value: number, currency: string): string => {
+  if (currency === 'FCFA') {
+    // If value is >= 1 million, divide by 1,000,000 and show as X.XXXK
+    if (value >= 1000000) {
+      const valueInMillions = value / 1000000;
+      return `${valueInMillions.toFixed(3).replace(/\.?0+$/, '')}K`;
+    }
+    // Otherwise divide by 1000 and show as whole number with K
+    const valueInK = value / 1000;
+    return `${Math.round(valueInK)}K`;
+  }
+  // For EUR, use standard formatting with dot as thousand separator
+  return new Intl.NumberFormat('fr-FR', {
+    maximumFractionDigits: 0,
+  }).format(value).replace(/[\s\u00A0]/g, '.');
+};
 
 const Finances: React.FC = () => {
   const { formatAmount, currency } = useCurrency();
+  
+  // Helper function to format tooltip values with FCFA rounding and separator
+  const formatTooltipValue = (value: number): string => {
+    if (currency === 'EUR') {
+      const formatted = Number(value).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return `€${formatted}`;
+    }
+    const rounded = roundFCFAToNearest25(value);
+    return `${formatFCFAWithSeparator(rounded)} FCFA`;
+  };
+  
+  // Helper function to format labels (uses K notation for FCFA, no decimals for EUR)
+  const formatLabelValue = (value: number): string => {
+    if (currency === 'EUR') {
+      const formatted = Number(value).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return `€${formatted}`;
+    }
+    // Use K notation for FCFA
+    return formatAxisLabel(value, currency);
+  };
   
   // Date range for KPI cards
   const [dateRangeStart, setDateRangeStart] = useState<string>('');
@@ -90,13 +146,38 @@ const Finances: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Queries - must be declared before dateRange useMemo
+  const { data: bookings, isLoading: loadingBookings } = useBookings();
+  const { data: expenses, isLoading: loadingExpenses } = useExpenses();
+  const { data: properties } = useProperties(true);
+  const { data: expensesByCategory } = useExpensesByCategory();
+
   // Date range for KPI cards
   const dateRange = useMemo(() => {
     const today = new Date();
-    const start = dateRangeStart ? new Date(dateRangeStart) : startOfMonth(today);
-    const end = dateRangeEnd ? new Date(dateRangeEnd) : endOfMonth(today);
+    let defaultStart: Date;
+    
+    // If no start date is selected, use the minimum check-in date from bookings
+    if (!dateRangeStart && bookings && bookings.length > 0) {
+      const checkInDates = bookings
+        .filter(b => b.status !== 'cancelled' && b.checkIn)
+        .map(b => new Date(b.checkIn));
+      
+      if (checkInDates.length > 0) {
+        defaultStart = new Date(Math.min(...checkInDates.map(d => d.getTime())));
+      } else {
+        defaultStart = new Date(2000, 0, 1); // Fallback if no valid bookings
+      }
+    } else if (!dateRangeStart) {
+      defaultStart = new Date(2000, 0, 1); // Fallback if no bookings
+    } else {
+      defaultStart = new Date(dateRangeStart);
+    }
+    
+    const start = dateRangeStart ? new Date(dateRangeStart) : defaultStart;
+    const end = dateRangeEnd ? new Date(dateRangeEnd) : today;
     return { startDate: start, endDate: end };
-  }, [dateRangeStart, dateRangeEnd]);
+  }, [dateRangeStart, dateRangeEnd, bookings]);
 
   // Chart period calculation
   const chartDateRange = useMemo(() => {
@@ -125,12 +206,6 @@ const Finances: React.FC = () => {
     
     return { startDate: start, endDate: today };
   }, [chartPeriod]);
-
-  // Queries
-  const { data: bookings, isLoading: loadingBookings } = useBookings();
-  const { data: expenses, isLoading: loadingExpenses } = useExpenses();
-  const { data: properties } = useProperties(true);
-  const { data: expensesByCategory } = useExpensesByCategory();
 
   // Previous period for comparison (same duration as selected period, but shifted back)
   const previousRange = useMemo(() => {
@@ -236,16 +311,25 @@ const Finances: React.FC = () => {
     const months: { 
       month: string; 
       revenue: number; 
+      revenueFCFA: number;
       expenses: number; 
+      expensesFCFA: number;
       profit: number;
+      profitFCFA: number;
       nightsBooked: number;
       avgNightPrice: number;
+      avgNightPriceFCFA: number;
       cashflow: number;
+      cashflowFCFA: number;
       occupancyRate: number;
     }[] = [];
     
     let currentMonth = startOfMonth(startDate);
     const endMonth = endOfMonth(endDate);
+    
+    // Track cumulative cashflow
+    let cumulativeCashflowEUR = 0;
+    let cumulativeCashflowFCFA = 0;
     
     while (currentMonth <= endMonth) {
       const monthStart = startOfMonth(currentMonth);
@@ -254,17 +338,31 @@ const Finances: React.FC = () => {
       const monthRevenue = calculateTotalRevenue(bookings, monthStart, monthEnd);
       const monthExpenses = calculateTotalExpenses(expenses, monthStart, monthEnd);
       const nightsBooked = calculateNightsBooked(bookings, monthStart, monthEnd);
-      const avgNightPrice = nightsBooked > 0 ? monthRevenue.EUR / nightsBooked : 0;
+      const avgNightPriceEUR = nightsBooked > 0 ? monthRevenue.EUR / nightsBooked : 0;
+      const avgNightPriceFCFA = nightsBooked > 0 ? monthRevenue.FCFA / nightsBooked : 0;
       const occupancyRate = calculateOccupancyRate(bookings, properties, monthStart, monthEnd);
+      
+      // Calculate monthly profit
+      const monthlyProfitEUR = monthRevenue.EUR - monthExpenses.EUR;
+      const monthlyProfitFCFA = monthRevenue.FCFA - monthExpenses.FCFA;
+      
+      // Add to cumulative cashflow
+      cumulativeCashflowEUR += monthlyProfitEUR;
+      cumulativeCashflowFCFA += monthlyProfitFCFA;
       
       months.push({
         month: format(currentMonth, 'MMM yyyy', { locale: fr }),
         revenue: monthRevenue.EUR,
+        revenueFCFA: monthRevenue.FCFA,
         expenses: monthExpenses.EUR,
-        profit: monthRevenue.EUR - monthExpenses.EUR,
+        expensesFCFA: monthExpenses.FCFA,
+        profit: monthlyProfitEUR,
+        profitFCFA: monthlyProfitFCFA,
         nightsBooked,
-        avgNightPrice: Math.round(avgNightPrice * 100) / 100,
-        cashflow: monthRevenue.EUR - monthExpenses.EUR, // Cashflow = Net Income
+        avgNightPrice: Math.round(avgNightPriceEUR * 100) / 100,
+        avgNightPriceFCFA: Math.round(avgNightPriceFCFA * 100) / 100,
+        cashflow: cumulativeCashflowEUR, // Cumulative cashflow (rolling sum)
+        cashflowFCFA: cumulativeCashflowFCFA,
         occupancyRate: Math.round(occupancyRate * 100) / 100,
       });
       
@@ -333,7 +431,7 @@ const Finances: React.FC = () => {
 
   // Expense breakdown by month (by category)
   const expenseBreakdownByMonth = useMemo(() => {
-    if (!expenses) return [];
+    if (!expenses) return { months: [], categories: [] };
 
     const { startDate, endDate } = chartDateRange;
     const months: { month: string; [category: string]: number | string }[] = [];
@@ -358,9 +456,10 @@ const Finances: React.FC = () => {
         month: format(currentMonth, 'MMM yyyy', { locale: fr }),
       };
       
-      // Initialize all categories to 0
+      // Initialize all categories to 0 for both EUR and FCFA
       allCategories.forEach((category) => {
         monthData[category] = 0;
+        monthData[`${category}_FCFA`] = 0;
       });
       
       // Sum expenses by category for this month
@@ -368,6 +467,7 @@ const Finances: React.FC = () => {
         const expenseDate = new Date(expense.date);
         if (expenseDate >= monthStart && expenseDate <= monthEnd) {
           monthData[expense.category] = (monthData[expense.category] as number) + expense.amountEUR;
+          monthData[`${expense.category}_FCFA`] = (monthData[`${expense.category}_FCFA`] as number) + expense.amountFCFA;
         }
       });
       
@@ -403,7 +503,7 @@ const Finances: React.FC = () => {
     if (dateRangeEnd) {
       return `Jusqu'au ${format(new Date(dateRangeEnd), 'dd MMM yyyy', { locale: fr })}`;
     }
-    return 'Période';
+    return 'Tout';
   };
 
   const clearDateRange = () => {
@@ -486,64 +586,72 @@ const Finances: React.FC = () => {
       <div className="space-y-4">
         {/* KPI Cards - Top Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Total Bookings - Light Purple */}
-          <div className="bg-purple-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Total Bookings</p>
-            <p className="text-3xl font-bold text-gray-900">{metrics?.totalBookings || 0}</p>
-          </div>
+          {/* Total Bookings */}
+          <StatsCard
+            title="Total Bookings"
+            value={metrics?.totalBookings || 0}
+            icon={<Calendar className="w-5 h-5" />}
+            variant="default"
+          />
 
-          {/* Nights Booked - Light Yellow */}
-          <div className="bg-yellow-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Nights Booked</p>
-            <p className="text-3xl font-bold text-gray-900">{metrics?.nightsBooked || 0}</p>
-          </div>
+          {/* Nights Booked */}
+          <StatsCard
+            title="Nights Booked"
+            value={metrics?.nightsBooked || 0}
+            icon={<Moon className="w-5 h-5" />}
+            variant="default"
+          />
 
-          {/* Occupancy Rate - Light Pink */}
-          <div className="bg-pink-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Occupancy Rate</p>
-            <p className="text-3xl font-bold text-gray-900">{((metrics?.occupancyRate || 0).toFixed(0))}%</p>
-          </div>
+          {/* Occupancy Rate */}
+          <StatsCard
+            title="Occupancy Rate"
+            value={`${((metrics?.occupancyRate || 0).toFixed(0))}%`}
+            icon={<Percent className="w-5 h-5" />}
+            variant="default"
+          />
 
-          {/* Avg Daily Rate - Light Orange */}
-          <div className="bg-orange-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Avg Daily Rate</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {formatAmount(metrics?.avgDailyRate?.EUR || 0, metrics?.avgDailyRate?.FCFA || 0)}
-            </p>
-          </div>
+          {/* Avg Daily Rate */}
+          <StatsCard
+            title="Avg Daily Rate"
+            value={formatAmount(metrics?.avgDailyRate?.EUR || 0, metrics?.avgDailyRate?.FCFA || 0)}
+            icon={<DollarSign className="w-5 h-5" />}
+            variant="default"
+          />
         </div>
 
         {/* KPI Cards - Bottom Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Total Income - Light Green */}
-          <div className="bg-green-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Total Income</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {formatAmount(metrics?.totalIncome?.EUR || 0, metrics?.totalIncome?.FCFA || 0)}
-            </p>
-          </div>
+          {/* Total Income */}
+          <StatsCard
+            title="Total Income"
+            value={formatAmount(metrics?.totalIncome?.EUR || 0, metrics?.totalIncome?.FCFA || 0)}
+            icon={<TrendingUp className="w-5 h-5" />}
+            variant="success"
+          />
 
-          {/* Total Expenses - Light Red */}
-          <div className="bg-red-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Total Expenses</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {formatAmount(metrics?.totalExpenses?.EUR || 0, metrics?.totalExpenses?.FCFA || 0)}
-            </p>
-          </div>
+          {/* Total Expenses */}
+          <StatsCard
+            title="Total Expenses"
+            value={formatAmount(metrics?.totalExpenses?.EUR || 0, metrics?.totalExpenses?.FCFA || 0)}
+            icon={<DollarSign className="w-5 h-5" />}
+            variant="default"
+          />
 
-          {/* Net Income - Light Blue */}
-          <div className="bg-blue-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Net Income</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {formatAmount(metrics?.netIncome?.EUR || 0, metrics?.netIncome?.FCFA || 0)}
-            </p>
-          </div>
+          {/* Net Income */}
+          <StatsCard
+            title="Net Income"
+            value={formatAmount(metrics?.netIncome?.EUR || 0, metrics?.netIncome?.FCFA || 0)}
+            icon={<TrendingUp className="w-5 h-5" />}
+            variant={metrics?.netIncome && metrics.netIncome.EUR > 0 ? 'success' : 'danger'}
+          />
 
-          {/* Return on Investment - Light Green */}
-          <div className="bg-green-100 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Return on Investment</p>
-            <p className="text-3xl font-bold text-gray-900">{((metrics?.roi || 0).toFixed(1))}%</p>
-          </div>
+          {/* Return on Investment */}
+          <StatsCard
+            title="Return on Investment"
+            value={`${((metrics?.roi || 0).toFixed(1))}%`}
+            icon={<Percent className="w-5 h-5" />}
+            variant={metrics?.roi && metrics.roi > 0 ? 'success' : 'default'}
+          />
         </div>
       </div>
 
@@ -570,12 +678,42 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => `${Number(value).toFixed(0)} nuits`} />
-                  <Bar dataKey="nightsBooked" fill="#3b82f6" name="Nuits réservées" />
+                <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    domain={[0, 31]}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value) => [`${Number(value).toFixed(0)} nuits`, 'Nuits réservées']}
+                  />
+                  <Bar 
+                    dataKey="nightsBooked" 
+                    fill="#6366f1" 
+                    name="Nuits réservées"
+                    radius={[8, 8, 0, 0]}
+                  >
+                    <LabelList 
+                      dataKey="nightsBooked" 
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => `${Number(value).toFixed(0)}`}
+                      style={{ fill: '#6b7280', fontSize: 12, fontWeight: 500 }}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </CardBody>
@@ -589,20 +727,57 @@ const Finances: React.FC = () => {
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
                 {channelDataByMonth.channels.length > 0 ? (
-                  <BarChart data={channelDataByMonth.months}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-                    <Legend />
+                  <BarChart data={channelDataByMonth.months} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      }}
+                      formatter={(value) => `${Math.ceil(Number(value))}%`}
+                    />
+                    <Legend 
+                      wrapperStyle={{ paddingTop: '20px' }}
+                      iconType="square"
+                      iconSize={12}
+                    />
                     {channelDataByMonth.channels.map((channel, index) => (
                       <Bar
                         key={channel}
                         dataKey={channel}
                         stackId="channels"
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                        fill={getChannelColor(channel)}
                         name={getChannelLabel(channel)}
-                      />
+                        radius={index === channelDataByMonth.channels.length - 1 ? [8, 8, 0, 0] : [0, 0, 0, 0]}
+                      >
+                        <LabelList
+                          dataKey={channel}
+                          position="center"
+                          formatter={(value: any) => {
+                            const percent = Number(value);
+                            return percent > 0 ? `${Math.ceil(percent)}%` : '';
+                          }}
+                          style={{ 
+                            fill: '#ffffff', 
+                            fontSize: 10, 
+                            fontWeight: 600,
+                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                          }}
+                        />
+                      </Bar>
                     ))}
                   </BarChart>
                 ) : (
@@ -621,30 +796,77 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value) =>
-                      currency === 'EUR' ? `€${Number(value).toFixed(0)}` : `${Number(value).toFixed(0)} FCFA`
-                    }
+                <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="expensesGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <Legend />
+                  <YAxis 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickFormatter={(value) => formatAxisLabel(value, currency)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value: any) => formatTooltipValue(Number(value))}
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                    iconSize={16}
+                  />
                   <Line
                     type="monotone"
-                    dataKey="revenue"
+                    dataKey={currency === 'EUR' ? 'revenue' : 'revenueFCFA'}
                     stroke="#10b981"
                     name="Revenus"
-                    strokeWidth={2}
-                  />
+                    strokeWidth={3}
+                    dot={{ fill: '#10b981', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                  >
+                    <LabelList
+                      dataKey={currency === 'EUR' ? 'revenue' : 'revenueFCFA'}
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => formatLabelValue(Number(value))}
+                      style={{ fill: '#10b981', fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
                   <Line
                     type="monotone"
-                    dataKey="expenses"
+                    dataKey={currency === 'EUR' ? 'expenses' : 'expensesFCFA'}
                     stroke="#ef4444"
                     name="Dépenses"
-                    strokeWidth={2}
-                  />
+                    strokeWidth={3}
+                    dot={{ fill: '#ef4444', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                  >
+                    <LabelList
+                      dataKey={currency === 'EUR' ? 'expenses' : 'expensesFCFA'}
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => formatLabelValue(Number(value))}
+                      style={{ fill: '#ef4444', fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
                 </LineChart>
               </ResponsiveContainer>
             </CardBody>
@@ -657,22 +879,45 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value) =>
-                      currency === 'EUR' ? `€${Number(value).toFixed(0)}` : `${Number(value).toFixed(0)} FCFA`
-                    }
+                <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <Bar dataKey="profit" name="Revenu net">
-                    {monthlyData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.profit >= 0 ? '#10b981' : '#ef4444'}
-                      />
-                    ))}
+                  <YAxis 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickFormatter={(value) => formatAxisLabel(value, currency)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value: any) => formatTooltipValue(Number(value))}
+                  />
+                  <Bar dataKey={currency === 'EUR' ? 'profit' : 'profitFCFA'} name="Revenu net" radius={[8, 8, 0, 0]}>
+                    <LabelList
+                      dataKey={currency === 'EUR' ? 'profit' : 'profitFCFA'}
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => formatLabelValue(Number(value))}
+                      style={{ fill: '#6b7280', fontSize: 10, fontWeight: 500 }}
+                    />
+                    {monthlyData.map((entry, index) => {
+                      const profitValue = currency === 'EUR' ? entry.profit : entry.profitFCFA;
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={profitValue >= 0 ? '#10b981' : '#ef4444'}
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -686,22 +931,51 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
+                <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickFormatter={(value) => formatAxisLabel(value, currency)}
+                  />
                   <Tooltip
-                    formatter={(value) =>
-                      currency === 'EUR' ? `€${Number(value).toFixed(2)}` : `${Number(value).toFixed(0)} FCFA`
-                    }
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value: any) => formatTooltipValue(Number(value))}
                   />
                   <Line
                     type="monotone"
-                    dataKey="avgNightPrice"
+                    dataKey={currency === 'EUR' ? 'avgNightPrice' : 'avgNightPriceFCFA'}
                     stroke="#8b5cf6"
                     name="Prix moyen/nuit"
-                    strokeWidth={2}
-                  />
+                    strokeWidth={3}
+                    dot={{ fill: '#8b5cf6', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                  >
+                    <LabelList
+                      dataKey={currency === 'EUR' ? 'avgNightPrice' : 'avgNightPriceFCFA'}
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => formatLabelValue(Number(value))}
+                      style={{ fill: '#8b5cf6', fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
                 </LineChart>
               </ResponsiveContainer>
             </CardBody>
@@ -714,25 +988,53 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
+                <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="cashflowGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickFormatter={(value) => formatAxisLabel(value, currency)}
+                  />
                   <Tooltip
-                    formatter={(value) =>
-                      currency === 'EUR' ? `€${Number(value).toFixed(0)}` : `${Number(value).toFixed(0)} FCFA`
-                    }
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value: any) => formatTooltipValue(Number(value))}
                   />
-                  <Line
+                  <Area
                     type="monotone"
-                    dataKey="cashflow"
+                    dataKey={currency === 'EUR' ? 'cashflow' : 'cashflowFCFA'}
                     stroke="#06b6d4"
+                    fill="url(#cashflowGradient)"
                     name="Trésorerie"
-                    strokeWidth={2}
-                    dot={{ fill: '#06b6d4', r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
+                    strokeWidth={3}
+                    dot={{ fill: '#06b6d4', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                  >
+                    <LabelList
+                      dataKey={currency === 'EUR' ? 'cashflow' : 'cashflowFCFA'}
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => formatLabelValue(Number(value))}
+                      style={{ fill: '#06b6d4', fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Area>
+                </AreaChart>
               </ResponsiveContainer>
             </CardBody>
           </Card>
@@ -744,20 +1046,51 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="occupancyGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value) => `${Number(value).toFixed(1)}%`}
+                  />
                   <Line
                     type="monotone"
                     dataKey="occupancyRate"
                     stroke="#ec4899"
                     name="Taux d'occupation"
-                    strokeWidth={2}
-                    dot={{ fill: '#ec4899', r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
+                    strokeWidth={3}
+                    dot={{ fill: '#ec4899', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                  >
+                    <LabelList
+                      dataKey="occupancyRate"
+                      position="top"
+                      offset={10}
+                      formatter={(value: any) => `${Math.round(Number(value))}%`}
+                      style={{ fill: '#ec4899', fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
                 </LineChart>
               </ResponsiveContainer>
             </CardBody>
@@ -770,24 +1103,44 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                {expenseBreakdownByMonth.categories.length > 0 ? (
-                  <BarChart data={expenseBreakdownByMonth.months}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
+                {expenseBreakdownByMonth.categories && expenseBreakdownByMonth.categories.length > 0 ? (
+                  <BarChart data={expenseBreakdownByMonth.months} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                      tickFormatter={(value) => formatAxisLabel(value, currency)}
+                    />
                     <Tooltip
-                      formatter={(value) =>
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      }}
+                      formatter={(value: any) =>
                         currency === 'EUR' ? `€${Number(value).toFixed(0)}` : `${Number(value).toFixed(0)} FCFA`
                       }
                     />
-                    <Legend />
-                    {expenseBreakdownByMonth.categories.map((category, index) => (
+                    <Legend 
+                      wrapperStyle={{ paddingTop: '20px' }}
+                      iconType="square"
+                      iconSize={12}
+                    />
+                    {expenseBreakdownByMonth.categories.map((category: string, index: number) => (
                       <Bar
                         key={category}
-                        dataKey={category}
+                        dataKey={currency === 'EUR' ? category : `${category}_FCFA`}
                         stackId="expenses"
                         fill={CHART_COLORS[index % CHART_COLORS.length]}
                         name={getCategoryLabel(category)}
+                        radius={index === expenseBreakdownByMonth.categories.length - 1 ? [8, 8, 0, 0] : [0, 0, 0, 0]}
                       />
                     ))}
                   </BarChart>

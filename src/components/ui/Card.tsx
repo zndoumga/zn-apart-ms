@@ -12,7 +12,7 @@ export const Card: React.FC<CardProps> = ({ children, className, hover = false, 
   return (
     <div
       className={clsx(
-        'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden',
+        'bg-white rounded-xl shadow-sm border border-gray-200/60 overflow-hidden',
         hover && 'hover:shadow-md transition-shadow duration-200 cursor-pointer',
         className
       )}
@@ -33,7 +33,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ children, className, act
   return (
     <div
       className={clsx(
-        'px-6 py-4 border-b border-gray-200 flex items-center justify-between',
+        'px-6 py-5 border-b border-gray-100 flex items-center justify-between',
         className
       )}
     >
@@ -50,7 +50,7 @@ interface CardBodyProps {
 }
 
 export const CardBody: React.FC<CardBodyProps> = ({ children, className, noPadding = false }) => {
-  return <div className={clsx(!noPadding && 'px-6 py-4', className)}>{children}</div>;
+  return <div className={clsx(!noPadding && 'px-6 py-5', className)}>{children}</div>;
 };
 
 interface CardFooterProps {
@@ -60,7 +60,7 @@ interface CardFooterProps {
 
 export const CardFooter: React.FC<CardFooterProps> = ({ children, className }) => {
   return (
-    <div className={clsx('px-6 py-4 border-t border-gray-200 bg-gray-50', className)}>
+    <div className={clsx('px-6 py-4 border-t border-gray-100 bg-gray-50/50', className)}>
       {children}
     </div>
   );

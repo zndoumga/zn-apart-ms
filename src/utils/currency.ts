@@ -22,6 +22,22 @@ export function convertCurrency(
 }
 
 /**
+ * Round FCFA amount up to the nearest 25 FCFA
+ */
+export function roundFCFAToNearest25(amount: number): number {
+  return Math.ceil(amount / 25) * 25;
+}
+
+/**
+ * Format FCFA with dot as thousand separator
+ * Note: Assumes amount is already rounded to nearest 25
+ */
+export function formatFCFAWithSeparator(amount: number): string {
+  // Format with dot as thousand separator
+  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/**
  * Format currency for display
  */
 export function formatCurrency(
@@ -35,21 +51,25 @@ export function formatCurrency(
   const { showSymbol = true, compact = false } = options || {};
   
   if (currency === 'EUR') {
+    // Format EUR with thousand separator (space in fr-FR, but we'll use dot for consistency)
+    // No decimals for EUR
     const formatted = new Intl.NumberFormat('fr-FR', {
       style: showSymbol ? 'currency' : 'decimal',
       currency: 'EUR',
       notation: compact ? 'compact' : 'standard',
-      minimumFractionDigits: compact ? 0 : 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-    return formatted;
-  } else {
-    const formatted = new Intl.NumberFormat('fr-FR', {
-      style: 'decimal',
-      notation: compact ? 'compact' : 'standard',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+    // Replace space/non-breaking space thousand separators with dot
+    // Format is typically "1 200 €" (without decimals)
+    // We want "1.200€" (dot for thousands, no space before €)
+    let result = formatted.replace(/(\d)[\s\u00A0](\d)/g, '$1.$2'); // Replace spaces between digits
+    result = result.replace(/[\s\u00A0]+€/, '€'); // Remove space before €
+    return result;
+  } else {
+    // For FCFA: round up to nearest 25 and use dot as thousand separator
+    const rounded = roundFCFAToNearest25(amount);
+    const formatted = formatFCFAWithSeparator(rounded);
     return showSymbol ? `${formatted} FCFA` : formatted;
   }
 }

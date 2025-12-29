@@ -4,8 +4,9 @@ import { calculateNights } from './dates';
 
 /**
  * Calculate occupancy rate for a period
- * Formula: (booked nights / total days in period) × 100
- * This represents what percentage of days in the period have bookings
+ * Formula: (booked nights / total available nights) × 100
+ * Total available nights = total days in period × number of active properties
+ * This represents what percentage of available nights were booked
  */
 export function calculateOccupancyRate(
   bookings: Booking[],
@@ -121,7 +122,12 @@ export function calculateOccupancyRate(
     });
   }
   
-  const rate = totalDays > 0 ? Math.min(100, (bookedNights / totalDays) * 100) : 0;
+  // Calculate total available nights (totalDays × number of active properties)
+  const activeProperties = properties.filter((p) => p.status === 'active');
+  const numberOfProperties = activeProperties.length;
+  const totalAvailableNights = totalDays * Math.max(1, numberOfProperties);
+  
+  const rate = totalAvailableNights > 0 ? Math.min(100, (bookedNights / totalAvailableNights) * 100) : 0;
   
   // Debug logging - always show
   console.log('=== Occupancy Calculation Debug ===');
@@ -130,12 +136,14 @@ export function calculateOccupancyRate(
     end: periodEnd.toISOString().split('T')[0],
     endPlusOne: new Date(periodEnd.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     totalDays,
+    numberOfProperties,
+    totalAvailableNights,
   });
   console.log('Bookings analyzed:', bookingDetails.length);
   console.log('Booking details:', bookingDetails);
   console.log('Total booked nights:', bookedNights);
   console.log('Occupancy rate:', rate.toFixed(2) + '%');
-  console.log('Calculation:', `${bookedNights} nights / ${totalDays} days = ${rate.toFixed(2)}%`);
+  console.log('Calculation:', `${bookedNights} nights / ${totalAvailableNights} available nights (${totalDays} days × ${numberOfProperties} properties) = ${rate.toFixed(2)}%`);
   console.log('===================================');
   
   return rate;
