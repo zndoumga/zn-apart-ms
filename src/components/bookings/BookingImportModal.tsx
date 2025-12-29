@@ -88,7 +88,7 @@ const BookingImportModal: React.FC<BookingImportModalProps> = ({
       const propertyName = String(row.property_name || '').trim();
       const property = propertyMap.get(propertyName.toLowerCase());
       if (!property) {
-        errors.push(`Propriété "${propertyName}" non trouvée`);
+        errors.push(`Appartement "${propertyName}" non trouvé`);
       } else {
         data.propertyId = property.id;
       }
@@ -265,7 +265,7 @@ const BookingImportModal: React.FC<BookingImportModalProps> = ({
     // Create sample data with property names
     const sampleData = [
       {
-        property_name: properties[0]?.name || 'Nom de la propriété',
+        property_name: properties[0]?.name || 'Nom de l\'appartement',
         guest_name: 'Jean Dupont',
         guest_email: 'jean.dupont@email.com',
         guest_phone: '+33612345678',
@@ -277,7 +277,7 @@ const BookingImportModal: React.FC<BookingImportModalProps> = ({
         notes: 'Arrivée tardive prévue',
       },
       {
-        property_name: properties[1]?.name || properties[0]?.name || 'Nom de la propriété',
+        property_name: properties[1]?.name || properties[0]?.name || 'Nom de l\'appartement',
         guest_name: 'Marie Martin',
         guest_email: 'marie.martin@email.com',
         guest_phone: '+33698765432',

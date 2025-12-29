@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
   };
 
   const propertyOptions = [
-    { value: '', label: 'Toutes les propriétés' },
+    { value: '', label: 'Tous les appartements' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -169,31 +169,31 @@ const Dashboard: React.FC = () => {
             options={propertyOptions}
             value={selectedProperty}
             onChange={setSelectedProperty}
-            placeholder="Sélectionner une propriété"
+            placeholder="Sélectionner un appartement"
           />
         </div>
       </div>
 
       {/* Quick action buttons for staff */}
       {!isAdmin && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           <Button
             onClick={() => window.location.href = '/bookings?new=true'}
-            className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 border-0"
+            className="w-full px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 border-0"
             leftIcon={<Plus className="w-4 h-4" />}
           >
             Nouvelle réservation
           </Button>
           <Button
             onClick={() => window.location.href = '/expenses?new=true'}
-            className="px-3 py-2 bg-red-600 text-white hover:bg-red-700 border-0"
+            className="w-full px-3 py-2 bg-red-600 text-white hover:bg-red-700 border-0"
             leftIcon={<Plus className="w-4 h-4" />}
           >
             Nouvelle dépense
           </Button>
           <Button
             onClick={() => window.location.href = '/requests?new=true'}
-            className="px-3 py-2 bg-yellow-500 text-white hover:bg-yellow-600 border-0"
+            className="w-full px-3 py-2 bg-yellow-500 text-white hover:bg-yellow-600 border-0"
             leftIcon={<Plus className="w-4 h-4" />}
           >
             Nouvelle demande
@@ -247,7 +247,6 @@ const Dashboard: React.FC = () => {
         <StatsCard
           title="Nuits réservées"
           value={nightsBooked}
-          subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
           icon={<Calendar className="w-4 h-4" />}
           variant="default"
         />

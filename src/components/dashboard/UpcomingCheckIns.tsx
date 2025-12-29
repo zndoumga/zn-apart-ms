@@ -17,7 +17,7 @@ const UpcomingCheckIns: React.FC = () => {
 
   const getPropertyName = (propertyId: string) => {
     const property = properties?.find((p) => p.id === propertyId);
-    return property?.name || 'Propriété inconnue';
+    return property?.name || 'Appartement inconnu';
   };
 
   if (isLoading) {

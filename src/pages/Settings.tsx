@@ -208,8 +208,8 @@ const Settings: React.FC = () => {
             À propos de ZN Apart MS
           </h3>
           <p className="text-sm text-primary-700">
-            Application de gestion de propriétés Airbnb. Développée pour la gestion
-            à distance de propriétés au Cameroun depuis la France.
+            Application de gestion d'appartements Airbnb. Développée pour la gestion
+            à distance d'appartements au Cameroun depuis la France.
           </p>
           <p className="text-xs text-primary-600 mt-2">Version 1.0.0</p>
         </CardBody>

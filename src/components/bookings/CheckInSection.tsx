@@ -175,11 +175,14 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
     idNumber: customer?.idNumber || '',
     checkInNotes: booking.checkInNotes || '',
   });
-  const [idFile, setIdFile] = useState<File | null>(null);
-  const [idPreview, setIdPreview] = useState<string | null>(customer?.idDocumentUrl || null);
+  const [idFileFront, setIdFileFront] = useState<File | null>(null);
+  const [idFileBack, setIdFileBack] = useState<File | null>(null);
+  const [idPreviewFront, setIdPreviewFront] = useState<string | null>(customer?.idDocumentUrl || null);
+  const [idPreviewBack, setIdPreviewBack] = useState<string | null>(customer?.idDocumentBackUrl || null);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(customer?.signatureUrl || null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputFrontRef = useRef<HTMLInputElement>(null);
+  const fileInputBackRef = useRef<HTMLInputElement>(null);
   const processCheckIn = useProcessCheckIn(booking.id);
 
   // Reset state when booking changes
@@ -213,8 +216,10 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
     } else {
       setCountryCode('+237');
     }
-    setIdFile(null);
-    setIdPreview(customer?.idDocumentUrl || null);
+    setIdFileFront(null);
+    setIdFileBack(null);
+    setIdPreviewFront(customer?.idDocumentUrl || null);
+    setIdPreviewBack(customer?.idDocumentBackUrl || null);
     setSignatureDataUrl(customer?.signatureUrl || null);
   }, [booking.id]);
 
@@ -222,23 +227,28 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleIdFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIdFileChange = (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
     if (file) {
-      setIdFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setIdPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      if (side === 'front') {
+        setIdFileFront(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setIdPreviewFront(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setIdFileBack(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setIdPreviewBack(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
   const handleSubmit = async () => {
-    if (!formData.guestName || !formData.nationality || !formData.idType || !formData.idNumber) {
-      return;
-    }
-
     // Combine country code with phone number
     const phoneWithCode = formData.phone 
       ? (formData.phone.startsWith('+') ? formData.phone : `${countryCode}${formData.phone}`)
@@ -249,7 +259,8 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
         ...formData,
         phone: phoneWithCode,
       },
-      idFile,
+      idFileFront,
+      idFileBack,
       signatureDataUrl,
     });
 
@@ -470,13 +481,23 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
           </div>
 
           {/* ID Document and Signature */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {customer.idDocumentUrl && (
               <div className="bg-white rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-2">Pièce d'identité</p>
+                <p className="text-xs text-gray-500 mb-2">Pièce d'identité (Recto)</p>
                 <img
                   src={customer.idDocumentUrl}
-                  alt="ID Document"
+                  alt="ID Document Front"
+                  className="max-h-32 rounded-lg border border-gray-200"
+                />
+              </div>
+            )}
+            {customer.idDocumentBackUrl && (
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-2">Pièce d'identité (Verso)</p>
+                <img
+                  src={customer.idDocumentBackUrl}
+                  alt="ID Document Back"
                   className="max-h-32 rounded-lg border border-gray-200"
                 />
               </div>
@@ -540,7 +561,6 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
             value={formData.guestName}
             onChange={(e) => handleInputChange('guestName', e.target.value)}
             leftIcon={<User className="w-4 h-4" />}
-            required
           />
           <Input
             label="Email"
@@ -605,7 +625,6 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
               handleInputChange('nationality', value);
             }}
             placeholder="Sélectionner une nationalité"
-            required
           />
           <Select
             label="Pays de résidence"
@@ -634,61 +653,108 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
               console.log('ID Type changed:', value);
               handleInputChange('idType', value);
             }}
-            required
           />
           <Input
             label="Numéro de pièce d'identité"
             value={formData.idNumber}
             onChange={(e) => handleInputChange('idNumber', e.target.value)}
             leftIcon={<CreditCard className="w-4 h-4" />}
-            required
           />
         </div>
 
-        {/* ID Document Upload */}
-        <div>
+        {/* ID Document Upload - Front and Back */}
+        <div className="space-y-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Photo de la pièce d'identité
+            Photos de la pièce d'identité
           </label>
-          {idPreview ? (
-            <div className="relative inline-block">
-              <img
-                src={idPreview}
-                alt="ID Document"
-                className="max-h-40 rounded-lg border border-gray-200"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setIdFile(null);
-                  setIdPreview(null);
-                }}
-                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+          
+          {/* Front of ID */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Recto (Face avant)</p>
+            {idPreviewFront ? (
+              <div className="relative inline-block">
+                <img
+                  src={idPreviewFront}
+                  alt="ID Document Front"
+                  className="max-h-40 rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdFileFront(null);
+                    setIdPreviewFront(null);
+                  }}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputFrontRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 cursor-pointer"
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 cursor-pointer"
-            >
-              <Image className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm text-gray-600">
-                Cliquez pour télécharger la pièce d'identité
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                JPG, PNG ou PDF (max 5MB)
-              </p>
-            </div>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf"
-            onChange={handleIdFileChange}
-            className="hidden"
-          />
+                <Image className="w-6 h-6 mx-auto mb-2 text-gray-400" />
+                <p className="text-xs text-gray-600">
+                  Cliquez pour télécharger le recto
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  JPG, PNG ou PDF (max 5MB)
+                </p>
+              </div>
+            )}
+            <input
+              ref={fileInputFrontRef}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => handleIdFileChange(e, 'front')}
+              className="hidden"
+            />
+          </div>
+
+          {/* Back of ID */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Verso (Face arrière)</p>
+            {idPreviewBack ? (
+              <div className="relative inline-block">
+                <img
+                  src={idPreviewBack}
+                  alt="ID Document Back"
+                  className="max-h-40 rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdFileBack(null);
+                    setIdPreviewBack(null);
+                  }}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputBackRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 cursor-pointer"
+              >
+                <Image className="w-6 h-6 mx-auto mb-2 text-gray-400" />
+                <p className="text-xs text-gray-600">
+                  Cliquez pour télécharger le verso
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  JPG, PNG ou PDF (max 5MB)
+                </p>
+              </div>
+            )}
+            <input
+              ref={fileInputBackRef}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => handleIdFileChange(e, 'back')}
+              className="hidden"
+            />
+          </div>
         </div>
 
         {/* Signature */}
@@ -722,22 +788,9 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
         <div className="flex justify-end pt-4 border-t border-blue-200">
           <button
             onClick={() => {
-              console.log('Form validation:', {
-                guestName: formData.guestName,
-                nationality: formData.nationality,
-                idType: formData.idType,
-                idNumber: formData.idNumber,
-                allValid: !!(formData.guestName && formData.nationality && formData.idType && formData.idNumber)
-              });
               handleSubmit();
             }}
-            disabled={
-              !formData.guestName ||
-              !formData.nationality ||
-              !formData.idType ||
-              !formData.idNumber ||
-              processCheckIn.isPending
-            }
+            disabled={processCheckIn.isPending}
             className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:shadow-none transition-all duration-200 flex items-center gap-2"
           >
             {processCheckIn.isPending ? (

@@ -267,7 +267,7 @@ const Expenses: React.FC = () => {
   };
 
   const propertyOptions = [
-    { value: '', label: 'Propriété' },
+    { value: '', label: 'Appartement' },
     { value: 'general', label: 'Général' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
@@ -861,7 +861,7 @@ const Expenses: React.FC = () => {
                 onClick={() => handleRowClick(expense)}
               >
                 <CardBody className="p-4">
-                  {/* Header: Date and Amount */}
+                  {/* Header: Date, Amount, and Actions */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <p className="text-xs text-gray-500 mb-1">Date effective</p>
@@ -869,11 +869,25 @@ const Expenses: React.FC = () => {
                         {formatDate(expense.date)}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500 mb-1">Montant</p>
-                      <p className="text-sm font-bold text-danger-600">
-                        -{formatAmount(expense.amountEUR, expense.amountFCFA)}
-                      </p>
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 mb-1">Montant</p>
+                        <p className="text-sm font-bold text-danger-600">
+                          -{formatAmount(expense.amountEUR, expense.amountFCFA)}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="p-1.5"
+                        title="Modifier"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingExpense(expense);
+                        }}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
 
@@ -897,56 +911,44 @@ const Expenses: React.FC = () => {
                       </Badge>
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Propriété</p>
+                      <p className="text-xs text-gray-500 mb-0.5">Appartement</p>
                       <p className="text-sm text-gray-900">
                         {getPropertyName(expense.propertyId)}
                       </p>
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions - Checkbox and Delete only (Edit is in header) */}
                   <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                     {isAdmin && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectExpense(expense.id);
-                        }}
-                        className="p-2"
-                        title={selectedExpenses.has(expense.id) ? 'Désélectionner' : 'Sélectionner'}
-                      >
-                        {selectedExpenses.has(expense.id) ? (
-                          <CheckSquare className="w-4 h-4 text-primary-600" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400 hover:text-primary-600" />
-                        )}
-                      </button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="p-2"
-                      title="Modifier"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingExpense(expense);
-                      }}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        title="Supprimer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingExpense(expense);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectExpense(expense.id);
+                          }}
+                          className="p-2"
+                          title={selectedExpenses.has(expense.id) ? 'Désélectionner' : 'Sélectionner'}
+                        >
+                          {selectedExpenses.has(expense.id) ? (
+                            <CheckSquare className="w-4 h-4 text-primary-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-400 hover:text-primary-600" />
+                          )}
+                        </button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Supprimer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingExpense(expense);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </CardBody>

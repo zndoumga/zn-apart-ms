@@ -54,7 +54,8 @@ function dataURLtoBlob(dataURL: string): Blob {
 export async function processCheckIn(
   bookingId: string,
   checkInData: CheckInFormData,
-  idFile: File | null,
+  idFileFront: File | null,
+  idFileBack: File | null,
   signatureDataUrl: string | null,
   performedBy: UserMode
 ): Promise<Customer> {
@@ -126,14 +127,24 @@ export async function processCheckIn(
     customerId = customer.id;
   }
 
-  // Upload ID document if provided
-  if (idFile) {
-    const idDocumentUrl = await uploadCustomerDocument(idFile, customerId, 'id');
+  // Upload ID document front if provided
+  if (idFileFront) {
+    const idDocumentUrl = await uploadCustomerDocument(idFileFront, customerId, 'id_front');
     await supabase
       .from(TABLES.CUSTOMERS)
       .update({ id_document_url: idDocumentUrl })
       .eq('id', customerId);
     customer.idDocumentUrl = idDocumentUrl;
+  }
+
+  // Upload ID document back if provided
+  if (idFileBack) {
+    const idDocumentBackUrl = await uploadCustomerDocument(idFileBack, customerId, 'id_back');
+    await supabase
+      .from(TABLES.CUSTOMERS)
+      .update({ id_document_back_url: idDocumentBackUrl })
+      .eq('id', customerId);
+    customer.idDocumentBackUrl = idDocumentBackUrl;
   }
 
   // Upload signature if provided
@@ -203,6 +214,7 @@ function mapCustomerFromDB(row: Record<string, unknown>): Customer {
     idType: (row.id_type as Customer['idType']) || undefined,
     idNumber: (row.id_number as string) || undefined,
     idDocumentUrl: (row.id_document_url as string) || undefined,
+    idDocumentBackUrl: (row.id_document_back_url as string) || undefined,
     signatureUrl: (row.signature_url as string) || undefined,
     preferredLanguage: (row.preferred_language as string) || 'fr',
     notes: (row.notes as string) || undefined,

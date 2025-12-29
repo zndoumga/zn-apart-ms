@@ -14,7 +14,7 @@ import type { BookingFormData, Booking } from '../../types';
 import { BOOKING_SOURCES, BOOKING_FORM_STATUSES } from '../../types';
 
 const bookingSchema = z.object({
-  propertyId: z.string().min(1, 'Propriété requise'),
+  propertyId: z.string().min(1, 'Appartement requis'),
   guestName: z.string().min(2, 'Nom du client requis'),
   checkIn: z.string().min(1, "Date d'arrivée requise"),
   checkOut: z.string().min(1, 'Date de départ requise'),
@@ -149,9 +149,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
         control={control}
         render={({ field }) => (
           <Select
-            label="Propriété"
+            label="Appartement"
             options={propertyOptions}
-            placeholder="Sélectionner une propriété"
+            placeholder="Sélectionner un appartement"
             error={errors.propertyId?.message}
             required
             {...field}

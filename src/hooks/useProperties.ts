@@ -42,10 +42,10 @@ export function useCreateProperty() {
       createProperty(data, photos, mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROPERTIES_QUERY_KEY });
-      success('Propriété créée', 'La propriété a été ajoutée avec succès.');
+      success('Appartement créé', 'L\'appartement a été ajouté avec succès.');
     },
     onError: (err) => {
-      error('Erreur', 'Impossible de créer la propriété.');
+      error('Erreur', 'Impossible de créer l\'appartement.');
       console.error(err);
     },
   });
@@ -70,10 +70,10 @@ export function useUpdateProperty() {
     }) => updateProperty(id, data, newPhotos, photosToDelete, mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROPERTIES_QUERY_KEY });
-      success('Propriété mise à jour', 'Les modifications ont été enregistrées.');
+      success('Appartement mis à jour', 'Les modifications ont été enregistrées.');
     },
     onError: (err) => {
-      error('Erreur', 'Impossible de mettre à jour la propriété.');
+      error('Erreur', 'Impossible de mettre à jour l\'appartement.');
       console.error(err);
     },
   });
@@ -88,10 +88,10 @@ export function useDeleteProperty() {
     mutationFn: (id: string) => deleteProperty(id, mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROPERTIES_QUERY_KEY });
-      success('Propriété supprimée', 'La propriété a été supprimée avec succès.');
+      success('Appartement supprimé', 'L\'appartement a été supprimé avec succès.');
     },
     onError: (err) => {
-      error('Erreur', 'Impossible de supprimer la propriété.');
+      error('Erreur', 'Impossible de supprimer l\'appartement.');
       console.error(err);
     },
   });

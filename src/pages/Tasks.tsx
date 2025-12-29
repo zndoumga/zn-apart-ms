@@ -132,7 +132,7 @@ const Tasks: React.FC = () => {
   };
 
   const propertyOptions = [
-    { value: '', label: 'Toutes les propriétés' },
+    { value: '', label: 'Tous les appartements' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -223,7 +223,7 @@ const Tasks: React.FC = () => {
         control={control}
         render={({ field }) => (
           <Select
-            label="Propriété (optionnel)"
+            label="Appartement (optionnel)"
             options={propertyOptions}
             {...field}
           />

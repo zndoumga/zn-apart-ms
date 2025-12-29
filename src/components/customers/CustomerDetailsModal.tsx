@@ -102,7 +102,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({
   }, [allBookings, customerId]);
 
   const getPropertyName = (propertyId: string) => {
-    return properties?.find((p) => p.id === propertyId)?.name || 'Propriété inconnue';
+    return properties?.find((p) => p.id === propertyId)?.name || 'Appartement inconnu';
   };
 
   const getSourceLabel = (source: string) => {

@@ -257,7 +257,7 @@ const Bookings: React.FC = () => {
   };
 
   const propertyOptions = [
-    { value: '', label: 'Propriété' },
+    { value: '', label: 'Appartement' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -285,7 +285,7 @@ const Bookings: React.FC = () => {
     },
     {
       key: 'propertyId',
-      header: 'Propriété',
+      header: 'Appartement',
       render: (booking: Booking) => getPropertyName(booking.propertyId),
     },
     {
@@ -495,7 +495,7 @@ const Bookings: React.FC = () => {
                   propertyFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
                 }`}
               >
-                <option value="">Propriété</option>
+                <option value="">Appartement</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -701,7 +701,7 @@ const Bookings: React.FC = () => {
                     propertyFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
                   }`}
                 >
-                  <option value="">Propriété</option>
+                  <option value="">Appartement</option>
                   {properties.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -956,7 +956,7 @@ const Bookings: React.FC = () => {
                           {booking.guests} invité(s)
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {getStatusBadge(booking.status)}
                         {booking.status === 'confirmed' && (
                           <Button
@@ -972,12 +972,24 @@ const Bookings: React.FC = () => {
                             <ClipboardCheck className="w-4 h-4" />
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="p-1.5"
+                          title="Modifier"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingBooking(booking);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
 
                     {/* Property */}
                     <div className="mb-2">
-                      <p className="text-xs text-gray-500 mb-0.5">Propriété</p>
+                      <p className="text-xs text-gray-500 mb-0.5">Appartement</p>
                       <p className="text-sm font-medium text-gray-900">
                         {getPropertyName(booking.propertyId)}
                       </p>
@@ -1010,21 +1022,9 @@ const Bookings: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="p-2"
-                        title="Modifier"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingBooking(booking);
-                        }}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      {isAdmin && (
+                    {/* Actions - Delete only (Edit and Check-in are in header) */}
+                    {isAdmin && (
+                      <div className="flex items-center justify-end pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1037,8 +1037,8 @@ const Bookings: React.FC = () => {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </CardBody>
                 </Card>
               ))

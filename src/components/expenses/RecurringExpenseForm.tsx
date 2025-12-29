@@ -55,7 +55,7 @@ const RecurringExpenseForm: React.FC<RecurringExpenseFormProps> = ({
   });
 
   const propertyOptions = [
-    { value: '', label: 'Général (toutes propriétés)' },
+    { value: '', label: 'Général (tous appartements)' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -115,7 +115,7 @@ const RecurringExpenseForm: React.FC<RecurringExpenseFormProps> = ({
         control={control}
         render={({ field }) => (
           <Select
-            label="Propriété"
+            label="Appartement"
             options={propertyOptions}
             helperText="Laissez 'Général' pour les dépenses communes"
             value={field.value || ''}

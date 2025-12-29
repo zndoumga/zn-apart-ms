@@ -218,6 +218,7 @@ export interface Customer {
   idType?: IDType;
   idNumber?: string;
   idDocumentUrl?: string;
+  idDocumentBackUrl?: string;
   signatureUrl?: string;
   preferredLanguage: string;
   notes?: string;
@@ -242,6 +243,7 @@ export interface CustomerFormData {
   idType?: IDType;
   idNumber?: string;
   idDocumentUrl?: string;
+  idDocumentBackUrl?: string;
   signatureUrl?: string;
   preferredLanguage?: string;
   notes?: string;

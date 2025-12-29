@@ -101,7 +101,7 @@ export async function getAuditLogsByAction(
  */
 export function formatAuditLogEntry(entry: AuditLogEntry): string {
   const entityNames: Record<AuditLogEntry['entity'], string> = {
-    property: 'Propriété',
+    property: 'Appartement',
     booking: 'Réservation',
     expense: 'Dépense',
     customer: 'Client',

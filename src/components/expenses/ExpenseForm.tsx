@@ -60,7 +60,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
           category: 'other',
           vendor: '',
           description: '',
-          paidFromMobileMoney: false,
+          paidFromMobileMoney: true,
         },
   });
 
@@ -115,7 +115,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   };
 
   const propertyOptions = [
-    { value: '', label: 'Général (toutes propriétés)' },
+    { value: '', label: 'Général (tous appartements)' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -217,7 +217,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         render={({ field }) => (
           <Select
             label="Catégorie"
-            options={EXPENSE_CATEGORIES}
+            options={[...EXPENSE_CATEGORIES].sort((a, b) => a.label.localeCompare(b.label, 'fr'))}
             error={errors.category?.message}
             required
             {...field}
@@ -231,7 +231,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
         control={control}
         render={({ field }) => (
           <Select
-            label="Propriété"
+            label="Appartement"
             options={propertyOptions}
             helperText="Laissez 'Général' pour les dépenses communes"
             value={field.value || ''}

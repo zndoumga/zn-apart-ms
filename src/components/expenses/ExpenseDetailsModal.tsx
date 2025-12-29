@@ -222,7 +222,7 @@ const ExpenseDetailsModal: React.FC<ExpenseDetailsModalProps> = ({
           <div className="bg-gray-50 rounded-xl p-4">
             <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
               <Home className="w-4 h-4" />
-              Propriété
+              Appartement
             </h3>
             <p className="font-medium text-gray-900">
               {property?.name || (expense.propertyId ? 'Unknown' : 'Général')}

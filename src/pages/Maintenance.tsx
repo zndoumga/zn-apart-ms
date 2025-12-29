@@ -115,7 +115,7 @@ const Maintenance: React.FC = () => {
   });
 
   const propertyOptions = [
-    { value: '', label: 'Toutes les propriétés' },
+    { value: '', label: 'Tous les appartements' },
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
@@ -132,7 +132,7 @@ const Maintenance: React.FC = () => {
     },
     {
       key: 'property',
-      header: 'Propriété',
+      header: 'Appartement',
       render: (entry: MaintenanceEntry) => getPropertyName(entry.propertyId),
     },
     {
@@ -213,7 +213,7 @@ const Maintenance: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
           <p className="text-gray-600 mt-1">
-            Journal de maintenance des propriétés
+            Journal de maintenance des appartements
           </p>
         </div>
         <div className="flex gap-2">
@@ -296,7 +296,7 @@ const Maintenance: React.FC = () => {
               control={control}
               render={({ field }) => (
                 <Select
-                  label="Propriété"
+                  label="Appartement"
                   options={propertyOptions.slice(1)}
                   required
                   {...field}
@@ -405,7 +405,7 @@ const Maintenance: React.FC = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-500">Propriété</p>
+                <p className="text-sm text-gray-500">Appartement</p>
                 <p className="font-medium">{getPropertyName(viewingEntry.propertyId)}</p>
               </div>
               <div>

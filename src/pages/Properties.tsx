@@ -200,7 +200,7 @@ const Properties: React.FC = () => {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label="Nom de la propriété"
+          label="Nom de l'appartement"
           placeholder="Appartement Douala Centre"
           error={errors.name?.message}
           required
@@ -229,7 +229,7 @@ const Properties: React.FC = () => {
 
       <TextArea
         label="Description"
-        placeholder="Description de la propriété..."
+        placeholder="Description de l'appartement..."
         {...register('description')}
       />
 
@@ -734,7 +734,7 @@ const Properties: React.FC = () => {
           Annuler
         </Button>
         <Button type="submit" isLoading={formLoading}>
-          {property ? 'Mettre à jour' : 'Créer la propriété'}
+          {property ? 'Mettre à jour' : 'Créer l\'appartement'}
         </Button>
       </div>
     </form>
@@ -750,13 +750,13 @@ const Properties: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Propriétés</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Appartements</h1>
           <p className="text-gray-600 mt-1">
-            {properties?.length || 0} propriété(s) enregistrée(s)
+            {properties?.length || 0} appartement(s) enregistré(s)
           </p>
         </div>
         <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
-          Ajouter une propriété
+          Ajouter un appartement
         </Button>
       </div>
 
@@ -764,10 +764,10 @@ const Properties: React.FC = () => {
       {!properties || properties.length === 0 ? (
         <EmptyState
           icon={<Building2 className="w-8 h-8 text-gray-400" />}
-          title="Aucune propriété"
-          description="Ajoutez votre première propriété pour commencer."
+          title="Aucun appartement"
+          description="Ajoutez votre premier appartement pour commencer."
           action={{
-            label: 'Ajouter une propriété',
+            label: 'Ajouter un appartement',
             onClick: handleOpenCreate,
           }}
         />
@@ -855,7 +855,7 @@ const Properties: React.FC = () => {
       <Modal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
-        title="Nouvelle propriété"
+        title="Nouvel appartement"
         size="lg"
       >
         <PropertyForm
@@ -868,7 +868,7 @@ const Properties: React.FC = () => {
       <Modal
         isOpen={!!editingProperty}
         onClose={() => setEditingProperty(null)}
-        title="Modifier la propriété"
+        title="Modifier l'appartement"
         size="lg"
       >
         {editingProperty && (
@@ -885,7 +885,7 @@ const Properties: React.FC = () => {
         isOpen={!!deletingProperty}
         onClose={() => setDeletingProperty(null)}
         onConfirm={handleDelete}
-        title="Supprimer la propriété ?"
+        title="Supprimer l'appartement ?"
         message={`Êtes-vous sûr de vouloir supprimer "${deletingProperty?.name}" ? Cette action est irréversible.`}
         confirmText="Supprimer"
         isLoading={deleteProperty.isPending}

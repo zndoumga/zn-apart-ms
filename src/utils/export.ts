@@ -79,7 +79,7 @@ export function exportBookings(
 ): void {
   const data = bookings.map((b) => ({
     'Date réservation': formatDate(b.createdAt),
-    'Propriété': propertyNames[b.propertyId] || b.propertyId,
+    'Appartement': propertyNames[b.propertyId] || b.propertyId,
     'Nom du client': b.guestName,
     'Arrivée': formatDate(b.checkIn),
     'Départ': formatDate(b.checkOut),
@@ -114,7 +114,7 @@ export function exportExpenses(
 ): void {
   const data = expenses.map((e) => ({
     'Date effective': formatDate(e.date),
-    'Propriété': e.propertyId ? propertyNames[e.propertyId] || e.propertyId : 'Général',
+    'Appartement': e.propertyId ? propertyNames[e.propertyId] || e.propertyId : 'Général',
     'Catégorie': getCategoryLabel(e.category),
     'Fournisseur': e.vendor || '',
     'Description': e.description,
@@ -168,7 +168,7 @@ export function exportMaintenanceToCSV(
 ): void {
   const data = entries.map((e) => ({
     'Date': formatDate(e.date),
-    'Propriété': propertyNames[e.propertyId] || e.propertyId,
+    'Appartement': propertyNames[e.propertyId] || e.propertyId,
     'Catégorie': getMaintenanceCategoryLabel(e.category),
     'Description': e.description,
     'Coût (EUR)': e.costEUR.toFixed(2),

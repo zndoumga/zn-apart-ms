@@ -219,7 +219,7 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         {/* Property & Dates */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-gray-50 rounded-xl p-4">
-            <h3 className="text-sm font-medium text-gray-500 mb-3">Propriété</h3>
+            <h3 className="text-sm font-medium text-gray-500 mb-3">Appartement</h3>
             <div className="flex items-center gap-3">
               <Home className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-900">{property?.name || 'N/A'}</span>

@@ -19,7 +19,7 @@ const AuditLog: React.FC = () => {
     { value: '', label: 'Tous les types' },
     { value: 'booking', label: 'Réservations' },
     { value: 'expense', label: 'Dépenses' },
-    { value: 'property', label: 'Propriétés' },
+    { value: 'property', label: 'Appartements' },
     { value: 'customer', label: 'Clients' },
     { value: 'task', label: 'Tâches' },
     { value: 'request', label: 'Demandes' },
@@ -52,7 +52,7 @@ const AuditLog: React.FC = () => {
     const labels: Record<AuditEntity, string> = {
       booking: 'Réservation',
       expense: 'Dépense',
-      property: 'Propriété',
+      property: 'Appartement',
       customer: 'Client',
       task: 'Tâche',
       request: 'Demande',

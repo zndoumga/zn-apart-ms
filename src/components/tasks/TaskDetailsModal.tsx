@@ -181,7 +181,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           {property && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Home className="w-4 h-4 text-gray-400" />
-              <span className="font-medium">Propriété:</span>
+              <span className="font-medium">Appartement:</span>
               <span>{property.name}</span>
             </div>
           )}

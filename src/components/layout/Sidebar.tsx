@@ -45,7 +45,7 @@ const adminNavigation: NavItem[] = [
   { name: 'Tableau de bord KPI', href: '/finances', icon: BarChart3, adminOnly: true },
   { name: 'Tâches', href: '/tasks', icon: CheckSquare },
   { name: 'Demandes', href: '/requests', icon: MessageSquare },
-  { name: 'Propriétés', href: '/properties', icon: Building2, adminOnly: true },
+  { name: 'Appartements', href: '/properties', icon: Building2, adminOnly: true },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench, adminOnly: true },
   { name: 'Journal', href: '/audit-log', icon: History, adminOnly: true },
   { name: 'Paramètres', href: '/settings', icon: Settings, adminOnly: true },

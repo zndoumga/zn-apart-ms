@@ -12,13 +12,15 @@ export function useProcessCheckIn(bookingId: string) {
   return useMutation({
     mutationFn: ({
       checkInData,
-      idFile,
+      idFileFront,
+      idFileBack,
       signatureDataUrl,
     }: {
       checkInData: CheckInFormData;
-      idFile: File | null;
+      idFileFront: File | null;
+      idFileBack: File | null;
       signatureDataUrl: string | null;
-    }) => processCheckIn(bookingId, checkInData, idFile, signatureDataUrl, mode),
+    }) => processCheckIn(bookingId, checkInData, idFileFront, idFileBack, signatureDataUrl, mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BOOKINGS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['customers'] });

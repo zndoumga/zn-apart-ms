@@ -87,7 +87,7 @@ const ExpenseImportModal: React.FC<ExpenseImportModalProps> = ({
       if (propertyName && propertyName.toLowerCase() !== 'général' && propertyName.toLowerCase() !== 'general') {
         const property = propertyMap.get(propertyName.toLowerCase());
         if (!property) {
-          errors.push(`Propriété "${propertyName}" non trouvée`);
+          errors.push(`Appartement "${propertyName}" non trouvé`);
         } else {
           data.propertyId = property.id;
         }
