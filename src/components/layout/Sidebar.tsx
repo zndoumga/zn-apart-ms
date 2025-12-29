@@ -31,6 +31,7 @@ const staffNavigation: NavItem[] = [
   { name: 'Vue d\'ensemble', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Réservations', href: '/bookings', icon: Calendar },
   { name: 'Dépenses', href: '/expenses', icon: Receipt },
+  { name: 'Mobile Money', href: '/mobile-money', icon: PiggyBank },
   { name: 'Tâches', href: '/tasks', icon: CheckSquare },
   { name: 'Demandes', href: '/requests', icon: MessageSquare },
 ];

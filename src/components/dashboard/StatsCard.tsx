@@ -74,21 +74,21 @@ const StatsCard: React.FC<StatsCardProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200/40 p-6 hover:shadow-md transition-all duration-200">
-      <div className="flex items-start justify-between mb-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200/40 p-4 md:p-6 hover:shadow-md transition-all duration-200">
+      <div className="flex items-start justify-between mb-4 md:mb-6">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
         <div
           className={clsx(
-            'p-3 rounded-xl',
+            'p-2 md:p-3 rounded-xl',
             variants[variant].bg
           )}
         >
-          <span className={clsx(variants[variant].icon, 'text-lg')}>{icon}</span>
+          <span className={clsx(variants[variant].icon, 'text-base md:text-lg')}>{icon}</span>
         </div>
       </div>
       
-      <div className="mb-4">
-        <h3 className="text-3xl font-bold text-gray-900 tracking-tight mb-1">{value}</h3>
+      <div className="mb-3 md:mb-4">
+        <h3 className="text-xl md:text-3xl font-bold text-gray-900 tracking-tight mb-1">{value}</h3>
         {subtitle && <p className="text-xs text-gray-500 font-medium">{subtitle}</p>}
       </div>
       
@@ -96,13 +96,13 @@ const StatsCard: React.FC<StatsCardProps> = ({
         <div className="flex items-center gap-2 pt-1">
           <div className={clsx('flex items-center gap-1.5', getChangeColor())}>
             {getTrendIcon()}
-            <span className="text-sm font-semibold">
+            <span className="text-xs md:text-sm font-semibold">
               {change > 0 ? '+' : ''}
               {change.toFixed(1)}%
             </span>
           </div>
           {changeLabel && (
-            <span className="text-xs text-gray-500 font-medium">{changeLabel}</span>
+            <span className="text-xs text-gray-500 font-medium hidden md:inline">{changeLabel}</span>
           )}
         </div>
       )}

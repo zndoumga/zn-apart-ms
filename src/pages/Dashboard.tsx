@@ -7,6 +7,7 @@ import {
   Percent,
   PiggyBank,
   TrendingUp,
+  Plus,
 } from 'lucide-react';
 import { useMode, useCurrency } from '../store/useAppStore';
 import StatsCard from '../components/dashboard/StatsCard';
@@ -14,6 +15,7 @@ import UpcomingCheckIns from '../components/dashboard/UpcomingCheckIns';
 import BookingCalendar from '../components/bookings/BookingCalendar';
 import BookingDetailsModal from '../components/bookings/BookingDetailsModal';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
+import Button from '../components/ui/Button';
 import { useBookings } from '../hooks/useBookings';
 import { useExpenses } from '../hooks/useExpenses';
 import { useTaskCounts } from '../hooks/useTasks';
@@ -172,37 +174,55 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats cards - Row 1: Financial metrics (4 cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Quick action buttons for staff */}
+      {!isAdmin && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            onClick={() => window.location.href = '/bookings?new=true'}
+            className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 border-0"
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            Nouvelle réservation
+          </Button>
+          <Button
+            onClick={() => window.location.href = '/expenses?new=true'}
+            className="px-3 py-2 bg-red-600 text-white hover:bg-red-700 border-0"
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            Nouvelle dépense
+          </Button>
+          <Button
+            onClick={() => window.location.href = '/requests?new=true'}
+            className="px-3 py-2 bg-yellow-500 text-white hover:bg-yellow-600 border-0"
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            Nouvelle demande
+          </Button>
+        </div>
+      )}
+
+      {/* Stats cards - Combined grid for better mobile layout */}
+      <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 md:gap-4`}>
         {/* 1. Income (Revenue) */}
         <StatsCard
           title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
           value={formatAmount(selectedMonthRevenue.EUR, selectedMonthRevenue.FCFA)}
           icon={<TrendingUp className="w-4 h-4" />}
-          change={revenueChange}
-          changeLabel="vs mois dernier"
+          change={isAdmin ? revenueChange : undefined}
+          changeLabel={isAdmin ? "vs mois dernier" : undefined}
           variant="success"
         />
 
-        {/* 2. Expenses - Admin only */}
-        {isAdmin ? (
-          <StatsCard
-            title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
-            value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
-            icon={<DollarSign className="w-4 h-4" />}
-            variant="default"
-          />
-        ) : (
-          <StatsCard
-            title="Tâches en attente"
-            value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
-            icon={<CheckSquare className="w-4 h-4" />}
-            variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
-          />
-        )}
+        {/* 2. Expenses */}
+        <StatsCard
+          title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+          value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
+          icon={<DollarSign className="w-4 h-4" />}
+          variant="default"
+        />
 
         {/* 3. Profit - Admin only */}
-        {isAdmin ? (
+        {isAdmin && (
           <StatsCard
             title="Bénéfice net"
             value={formatAmount(
@@ -211,13 +231,6 @@ const Dashboard: React.FC = () => {
             )}
             icon={<TrendingUp className="w-4 h-4" />}
             variant={selectedMonthRevenue.EUR - selectedMonthExpenses.EUR > 0 ? 'success' : 'danger'}
-          />
-        ) : (
-          <StatsCard
-            title="Demandes non résolues"
-            value={unresolvedRequests || 0}
-            icon={<AlertCircle className="w-4 h-4" />}
-            variant={unresolvedRequests && unresolvedRequests > 0 ? 'warning' : 'default'}
           />
         )}
 
@@ -229,10 +242,7 @@ const Dashboard: React.FC = () => {
           variant={isAdmin && isLowBalance ? 'danger' : 'default'}
           subtitle={isAdmin && isLowBalance ? '⚠️ Solde bas' : undefined}
         />
-      </div>
 
-      {/* Stats cards - Row 2: Operational metrics (5 cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* 5. Nights booked */}
         <StatsCard
           title="Nuits réservées"
@@ -242,42 +252,45 @@ const Dashboard: React.FC = () => {
           variant="default"
         />
 
-        {/* 6. Occupancy rate */}
-        <StatsCard
-          title="Taux d'occupation"
-          value={`${monthOccupancy.rate.toFixed(0)}%`}
-          subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
-          icon={<Percent className="w-4 h-4" />}
-          variant="default"
-        />
-
-        {/* 7. Average night price */}
-        <StatsCard
-          title="Prix moyen/nuit"
-          value={formatAmount(averageNightPrice.EUR, averageNightPrice.FCFA)}
-          icon={<DollarSign className="w-4 h-4" />}
-          variant="default"
-        />
-
-        {/* 8. Tasks - Admin only */}
+        {/* 6. Occupancy rate - Admin only */}
         {isAdmin && (
           <StatsCard
-            title="Tâches en attente"
-            value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
-            icon={<CheckSquare className="w-4 h-4" />}
-            variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
+            title="Taux d'occupation"
+            value={`${monthOccupancy.rate.toFixed(0)}%`}
+            subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
+            icon={<Percent className="w-4 h-4" />}
+            variant="default"
           />
         )}
 
-        {/* 9. Requests - Admin only */}
+        {/* 7. Average night price - Admin only */}
         {isAdmin && (
           <StatsCard
-            title="Demandes non résolues"
-            value={unresolvedRequests || 0}
-            icon={<AlertCircle className="w-4 h-4" />}
-            variant={unresolvedRequests && unresolvedRequests > 0 ? 'warning' : 'default'}
+            title="Prix moyen/nuit"
+            value={formatAmount(averageNightPrice.EUR, averageNightPrice.FCFA)}
+            icon={<DollarSign className="w-4 h-4" />}
+            variant="default"
           />
         )}
+
+        {/* 8. Tasks */}
+        <StatsCard
+          title="Tâches en attente"
+          value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
+          icon={<CheckSquare className="w-4 h-4" />}
+          variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
+        />
+
+        {/* 9. Requests */}
+        <StatsCard
+          title="Demandes non résolues"
+          value={unresolvedRequests || 0}
+          icon={<AlertCircle className="w-4 h-4" />}
+          variant={unresolvedRequests && unresolvedRequests > 0 ? 'warning' : 'default'}
+        />
+        
+        {/* Empty placeholder for admin to maintain 2-column layout on mobile (9 cards -> 10 slots) */}
+        {isAdmin && <div className="md:hidden" />}
       </div>
 
       {/* Main content */}
@@ -326,34 +339,6 @@ const Dashboard: React.FC = () => {
         formatAmount={formatAmount}
       />
 
-      {/* Quick actions for staff */}
-      {!isAdmin && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card hover onClick={() => window.location.href = '/bookings/new'}>
-            <CardBody className="text-center py-10">
-              <Calendar className="w-10 h-10 text-indigo-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 text-base">Nouvelle réservation</h3>
-              <p className="text-sm text-gray-500 mt-1.5">Ajouter une arrivée</p>
-            </CardBody>
-          </Card>
-
-          <Card hover onClick={() => window.location.href = '/expenses/new'}>
-            <CardBody className="text-center py-10">
-              <DollarSign className="w-10 h-10 text-emerald-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 text-base">Nouvelle dépense</h3>
-              <p className="text-sm text-gray-500 mt-1.5">Enregistrer un achat</p>
-            </CardBody>
-          </Card>
-
-          <Card hover onClick={() => window.location.href = '/requests/new'}>
-            <CardBody className="text-center py-10">
-              <AlertCircle className="w-10 h-10 text-amber-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 text-base">Nouvelle demande</h3>
-              <p className="text-sm text-gray-500 mt-1.5">Soumettre une demande</p>
-            </CardBody>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };

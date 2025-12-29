@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Pencil, Trash2, Search } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -31,6 +31,7 @@ const MobileMoney: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<MobileMoneyTransaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<MobileMoneyTransaction | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const [search, setSearch] = useState('');
 
   // Queries
   const { data: balance } = useCurrentBalance();
@@ -105,11 +106,18 @@ const MobileMoney: React.FC = () => {
   };
 
   // Filter transactions
-  const filteredTransactions = React.useMemo(() => {
+  const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
-    if (!typeFilter) return transactions;
-    return transactions.filter((t) => t.type === typeFilter);
-  }, [transactions, typeFilter]);
+    
+    return transactions.filter((t) => {
+      const matchesType = !typeFilter || t.type === typeFilter;
+      const matchesSearch = !search || 
+        t.description.toLowerCase().includes(search.toLowerCase()) ||
+        (t.reference && t.reference.toLowerCase().includes(search.toLowerCase()));
+      
+      return matchesType && matchesSearch;
+    });
+  }, [transactions, typeFilter, search]);
 
   const typeOptions = [
     { value: '', label: 'Tous les types' },
@@ -214,9 +222,11 @@ const MobileMoney: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Mobile Money</h1>
           <p className="text-gray-600 mt-1">Gérez votre compte Mobile Money</p>
         </div>
-        <Button onClick={() => setShowTransfer(true)} leftIcon={<Plus className="w-4 h-4" />}>
-          Nouvelle transaction
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => setShowTransfer(true)} leftIcon={<Plus className="w-4 h-4" />}>
+            Nouvelle transaction
+          </Button>
+        )}
       </div>
 
       {/* Balance card */}
@@ -250,12 +260,43 @@ const MobileMoney: React.FC = () => {
       {/* Filters */}
       <Card>
         <CardBody>
-          <div className="flex gap-4">
+          {/* Desktop Layout */}
+          <div className="hidden md:flex items-center gap-4">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
             <Select
               options={typeOptions}
               value={typeFilter}
               onChange={setTypeFilter}
               className="w-48"
+            />
+          </div>
+
+          {/* Mobile Layout */}
+          <div className="md:hidden space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+            <Select
+              options={typeOptions}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              className="w-full"
             />
           </div>
         </CardBody>
@@ -268,13 +309,110 @@ const MobileMoney: React.FC = () => {
             Historique des transactions
           </h3>
         </CardHeader>
-        <Table
-          columns={columns}
-          data={filteredTransactions}
-          keyExtractor={(item) => item.id}
-          isLoading={loadingTransactions}
-          emptyMessage="Aucune transaction"
-        />
+        
+        {/* Desktop Table View */}
+        <div className="hidden md:block">
+          <Table
+            columns={columns}
+            data={filteredTransactions}
+            keyExtractor={(item) => item.id}
+            isLoading={loadingTransactions}
+            emptyMessage="Aucune transaction"
+          />
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden p-4 space-y-3">
+          {loadingTransactions ? (
+            <div className="text-center py-8 text-gray-500">Chargement...</div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Aucune transaction</div>
+          ) : (
+            filteredTransactions.map((transaction) => (
+              <Card 
+                key={transaction.id}
+                className="border-l-4"
+                style={{
+                  borderLeftColor: transaction.type === 'deposit' ? '#10b981' : '#ef4444'
+                }}
+              >
+                <CardBody className="p-4">
+                  {/* Header: Date and Type */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-1">Date</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {formatDate(transaction.date)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {transaction.type === 'deposit' ? (
+                        <ArrowUpCircle className="w-5 h-5 text-success-500" />
+                      ) : (
+                        <ArrowDownCircle className="w-5 h-5 text-danger-500" />
+                      )}
+                      <span className="text-sm font-medium text-gray-700">
+                        {transaction.type === 'deposit' ? 'Dépôt' : 'Retrait'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="mb-2">
+                    <p className="text-xs text-gray-500 mb-0.5">Description</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {transaction.description}
+                    </p>
+                    {transaction.reference && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Réf: {transaction.reference}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-0.5">Montant</p>
+                    <p
+                      className={`text-lg font-bold ${
+                        transaction.type === 'deposit'
+                          ? 'text-success-600'
+                          : 'text-danger-600'
+                      }`}
+                    >
+                      {transaction.type === 'deposit' ? '+' : '-'}
+                      {formatAmount(transaction.amountEUR, transaction.amountFCFA)}
+                    </p>
+                  </div>
+
+                  {/* Actions (Admin only, for deposits) */}
+                  {isAdmin && transaction.type === 'deposit' && (
+                    <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="p-2"
+                        title="Modifier"
+                        onClick={() => handleEditTransaction(transaction)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Supprimer"
+                        onClick={() => setDeletingTransaction(transaction)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            ))
+          )}
+        </div>
       </Card>
 
       {/* Add/Edit Transaction Modal */}

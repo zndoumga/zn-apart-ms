@@ -54,6 +54,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/expenses" element={<Expenses />} />
+            <Route path="/mobile-money" element={<MobileMoney />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/requests" element={<Requests />} />
             
@@ -79,14 +80,6 @@ function App() {
               element={
                 <AdminRoute>
                   <Maintenance />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/mobile-money"
-              element={
-                <AdminRoute>
-                  <MobileMoney />
                 </AdminRoute>
               }
             />

@@ -17,6 +17,7 @@ import TextArea from '../ui/TextArea';
 import type { Task, TaskStatus, Property, TaskComment } from '../../types';
 import { formatDate, formatRelativeTime } from '../../utils/dates';
 import { useTaskComments, useAddTaskComment, useDeleteTaskComment } from '../../hooks/useTaskComments';
+import { useUpdateTaskStatus } from '../../hooks/useTasks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -45,6 +46,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const { data: comments, isLoading: commentsLoading } = useTaskComments(taskId);
   const addComment = useAddTaskComment(taskId);
   const deleteComment = useDeleteTaskComment(taskId);
+  const updateTaskStatus = useUpdateTaskStatus();
 
   if (!task) return null;
 
@@ -149,6 +151,29 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           {task.description && (
             <p className="text-gray-700 whitespace-pre-wrap">{task.description}</p>
           )}
+        </div>
+
+        {/* Status Change Dropdown */}
+        <div className="border-t pt-4">
+          <div className="bg-primary-50 border-2 border-primary-200 rounded-lg p-4">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Changer le statut
+            </label>
+            <select
+              value={task.status}
+              onChange={(e) => {
+                updateTaskStatus.mutate({
+                  id: task.id,
+                  status: e.target.value as TaskStatus,
+                });
+              }}
+              className="w-full px-3 py-2.5 text-sm font-medium border-2 border-primary-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
+            >
+              <option value="todo">À faire</option>
+              <option value="in_progress">En cours</option>
+              <option value="done">Terminé</option>
+            </select>
+          </div>
         </div>
 
         {/* Task Details */}

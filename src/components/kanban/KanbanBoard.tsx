@@ -28,12 +28,16 @@ const COLUMNS: { id: TaskStatus; title: string }[] = [
 
 interface KanbanBoardProps {
   onTaskClick?: (task: Task) => void;
+  tasks?: Task[];
 }
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ onTaskClick }) => {
-  const { data: tasks, isLoading } = useTasks();
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ onTaskClick, tasks: providedTasks }) => {
+  const { data: allTasks, isLoading } = useTasks();
   const updateTaskStatus = useUpdateTaskStatus();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  // Use provided tasks if available, otherwise use all tasks
+  const tasks = providedTasks || allTasks;
 
   // Group tasks by status
   const tasksByStatus = useMemo(() => {

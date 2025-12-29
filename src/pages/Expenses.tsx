@@ -466,7 +466,7 @@ const Expenses: React.FC = () => {
           </Button>
           <Button 
             onClick={() => setShowForm(true)} 
-            className="p-2"
+            className="p-2 bg-red-600 text-white hover:bg-red-700"
             title="Nouvelle dépense"
           >
             <Plus className="w-5 h-5" />
@@ -477,11 +477,12 @@ const Expenses: React.FC = () => {
       {/* Compact Filter Bar */}
       <Card className="overflow-visible">
         <CardBody className="py-3 overflow-visible">
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Desktop Layout */}
+          <div className="hidden md:flex flex-wrap items-center gap-3">
             {/* Filter icon + label */}
             <div className="flex items-center gap-2 text-gray-500">
               <Filter className="w-4 h-4" />
-              <span className="text-sm font-medium hidden sm:inline">Filtres</span>
+              <span className="text-sm font-medium">Filtres</span>
             </div>
 
             {/* Search - compact */}
@@ -492,7 +493,7 @@ const Expenses: React.FC = () => {
                 placeholder="Rechercher..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg w-32 sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
 
@@ -500,7 +501,9 @@ const Expenses: React.FC = () => {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className={`px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                categoryFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+              }`}
             >
               {categoryOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -513,7 +516,9 @@ const Expenses: React.FC = () => {
             <select
               value={propertyFilter}
               onChange={(e) => setPropertyFilter(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className={`px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                propertyFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+              }`}
             >
               {propertyOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -533,7 +538,7 @@ const Expenses: React.FC = () => {
                 }`}
               >
                 <CalendarRange className="w-4 h-4" />
-                <span className="hidden sm:inline">
+                <span>
                   {dateRangeStart || dateRangeEnd
                     ? `${dateRangeStart || '...'} - ${dateRangeEnd || '...'}`
                     : 'Période'}
@@ -561,14 +566,20 @@ const Expenses: React.FC = () => {
                         className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
-                    {(dateRangeStart || dateRangeEnd) && (
+                    <div className="flex gap-2 pt-2 border-t">
                       <button
                         onClick={clearDateRange}
-                        className="text-xs text-gray-500 hover:text-gray-700"
+                        className="flex-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
                       >
-                        Effacer les dates
+                        Effacer
                       </button>
-                    )}
+                      <button
+                        onClick={() => setShowDatePicker(false)}
+                        className="flex-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                      >
+                        Appliquer
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -585,7 +596,7 @@ const Expenses: React.FC = () => {
                 className="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700"
               >
                 <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Effacer</span>
+                <span>Effacer</span>
               </button>
             )}
 
@@ -635,20 +646,312 @@ const Expenses: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Mobile Layout */}
+          <div className="md:hidden space-y-2">
+            {/* Row 1: Search (half width) + Category (half width) */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Search - half width */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              
+              {/* Category dropdown - half width */}
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className={`px-3 py-2 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 h-[38px] ${
+                  categoryFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+                }`}
+              >
+                {categoryOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Row 2: Property + Date Range */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Property filter */}
+              <select
+                value={propertyFilter}
+                onChange={(e) => setPropertyFilter(e.target.value)}
+                className={`px-3 py-2 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 h-[38px] ${
+                  propertyFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+                }`}
+              >
+                {propertyOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* Date range picker */}
+              <div className="relative" ref={datePickerRef}>
+                <button
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className={`w-full h-[38px] flex items-center justify-center gap-1.5 px-3 text-sm border rounded-lg bg-white cursor-pointer hover:bg-gray-50 ${
+                    dateRangeStart || dateRangeEnd
+                      ? 'border-primary-300 bg-primary-50'
+                      : 'border-gray-200'
+                  }`}
+                >
+                  <CalendarRange className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <span className="text-xs truncate">
+                    {dateRangeStart || dateRangeEnd
+                      ? `${dateRangeStart || '...'} - ${dateRangeEnd || '...'}`
+                      : 'Période'}
+                  </span>
+                  {(dateRangeStart || dateRangeEnd) && (
+                    <X 
+                      className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 flex-shrink-0" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearDateRange();
+                      }}
+                    />
+                  )}
+                </button>
+
+                {showDatePicker && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Du</label>
+                        <input
+                          type="date"
+                          value={dateRangeStart}
+                          onChange={(e) => setDateRangeStart(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Au</label>
+                        <input
+                          type="date"
+                          value={dateRangeEnd}
+                          onChange={(e) => setDateRangeEnd(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t">
+                        <button
+                          onClick={clearDateRange}
+                          className="flex-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                        >
+                          Effacer
+                        </button>
+                        <button
+                          onClick={() => setShowDatePicker(false)}
+                          className="flex-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                        >
+                          Appliquer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: Sort and Clear */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Sort buttons */}
+              <div className="flex items-center gap-2 flex-1">
+                <span className="text-xs text-gray-500 whitespace-nowrap">Tri:</span>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                  <button
+                    onClick={() => handleSortClick('date')}
+                    className={`px-3 py-1.5 text-xs flex items-center justify-center gap-1 transition-colors ${
+                      sortField === 'date' 
+                        ? 'bg-gray-800 text-white' 
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Date
+                    {sortField === 'date' && (
+                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSortClick('amount')}
+                    className={`px-3 py-1.5 text-xs flex items-center justify-center gap-1 transition-colors border-l border-gray-200 ${
+                      sortField === 'amount' 
+                        ? 'bg-gray-800 text-white' 
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Montant
+                    {sortField === 'amount' && (
+                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSortClick('category')}
+                    className={`px-3 py-1.5 text-xs flex items-center justify-center gap-1 transition-colors border-l border-gray-200 ${
+                      sortField === 'category' 
+                        ? 'bg-gray-800 text-white' 
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Catégorie
+                    {sortField === 'category' && (
+                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Clear filters button */}
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setCategoryFilter('');
+                    setPropertyFilter('');
+                    clearDateRange();
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline whitespace-nowrap"
+                >
+                  Effacer
+                </button>
+              )}
+            </div>
+          </div>
         </CardBody>
       </Card>
 
-      {/* Table */}
-      <Card>
-        <Table
-          columns={columns}
-          data={sortedExpenses}
-          keyExtractor={(item) => item.id}
-          isLoading={isLoading}
-          emptyMessage="Aucune dépense trouvée"
-          onRowClick={handleRowClick}
-        />
-      </Card>
+      {/* Content */}
+      <>
+        {/* Desktop Table View */}
+        <Card className="hidden md:block">
+          <Table
+            columns={columns}
+            data={sortedExpenses}
+            keyExtractor={(item) => item.id}
+            isLoading={isLoading}
+            emptyMessage="Aucune dépense trouvée"
+            onRowClick={handleRowClick}
+          />
+        </Card>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-500">Chargement...</div>
+          ) : sortedExpenses.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Aucune dépense trouvée</div>
+          ) : (
+            sortedExpenses.map((expense) => (
+              <Card 
+                key={expense.id} 
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => handleRowClick(expense)}
+              >
+                <CardBody className="p-4">
+                  {/* Header: Date and Amount */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-1">Date effective</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {formatDate(expense.date)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 mb-1">Montant</p>
+                      <p className="text-sm font-bold text-danger-600">
+                        -{formatAmount(expense.amountEUR, expense.amountFCFA)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Description and Vendor */}
+                  <div className="mb-2">
+                    <p className="text-xs text-gray-500 mb-0.5">Description</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {expense.vendor 
+                        ? `${expense.vendor} : ${expense.description}`
+                        : expense.description
+                      }
+                    </p>
+                  </div>
+
+                  {/* Category and Property */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Catégorie</p>
+                      <Badge variant={getCategoryBadgeVariant(expense.category)} size="sm">
+                        {getCategoryLabel(expense.category)}
+                      </Badge>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Propriété</p>
+                      <p className="text-sm text-gray-900">
+                        {getPropertyName(expense.propertyId)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectExpense(expense.id);
+                        }}
+                        className="p-2"
+                        title={selectedExpenses.has(expense.id) ? 'Désélectionner' : 'Sélectionner'}
+                      >
+                        {selectedExpenses.has(expense.id) ? (
+                          <CheckSquare className="w-4 h-4 text-primary-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400 hover:text-primary-600" />
+                        )}
+                      </button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="p-2"
+                      title="Modifier"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingExpense(expense);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="p-2 border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Supprimer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingExpense(expense);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </CardBody>
+              </Card>
+            ))
+          )}
+        </div>
+      </>
 
       {/* Details Modal */}
       <ExpenseDetailsModal
