@@ -259,11 +259,9 @@ const Tasks: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          {isAdmin && (
-            <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
-              Nouvelle tâche
-            </Button>
-          )}
+          <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
+            Nouvelle tâche
+          </Button>
         </div>
       </div>
 

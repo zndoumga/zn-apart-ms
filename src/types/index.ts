@@ -143,6 +143,9 @@ export type ExpenseCategory =
   | 'marketing'
   | 'furnishings'
   | 'security'
+  | 'transport'
+  | 'mobile_data'
+  | 'cleaning_material'
   | 'other';
 
 export type RecurringFrequency = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -484,10 +487,13 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: 'cleaning', label: 'Nettoyage' },
   { value: 'laundry', label: 'Blanchisserie' },
   { value: 'consumables', label: 'Consommables (Savon, Huile, etc.)' },
+  { value: 'cleaning_material', label: 'Matériel de nettoyage' },
   { value: 'supplies', label: 'Fournitures' },
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'wages', label: 'Salaires' },
   { value: 'taxes', label: 'Taxes & Impôts' },
+  { value: 'transport', label: 'Transport' },
+  { value: 'mobile_data', label: 'Données mobiles' },
   { value: 'marketing', label: 'Marketing' },
   { value: 'furnishings', label: 'Mobilier' },
   { value: 'security', label: 'Sécurité' },

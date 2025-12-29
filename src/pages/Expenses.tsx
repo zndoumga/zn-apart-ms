@@ -172,10 +172,13 @@ const Expenses: React.FC = () => {
       cleaning: 'primary',
       laundry: 'primary',
       consumables: 'success',
+      cleaning_material: 'success',
       supplies: 'success',
       maintenance: 'warning',
       wages: 'primary',
       taxes: 'danger',
+      transport: 'warning',
+      mobile_data: 'primary',
     };
     return variants[category] || 'gray';
   };
