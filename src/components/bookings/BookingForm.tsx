@@ -1,21 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Search, X } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import TextArea from '../ui/TextArea';
 import DatePicker from '../ui/DatePicker';
 import { useProperties } from '../../hooks/useProperties';
+import { useCustomers } from '../../hooks/useCustomers';
 import { useCurrency } from '../../store/useAppStore';
 import { calculateNights, formatForInput } from '../../utils/dates';
-import type { BookingFormData, Booking } from '../../types';
-import { BOOKING_SOURCES, BOOKING_FORM_STATUSES } from '../../types';
+import type { BookingFormData, Booking, Customer } from '../../types';
+import { BOOKING_SOURCES, BOOKING_FORM_STATUSES, PAYMENT_STATUSES } from '../../types';
 
 const bookingSchema = z.object({
   propertyId: z.string().min(1, 'Appartement requis'),
   guestName: z.string().min(2, 'Nom du client requis'),
+  customerId: z.string().optional(),
+  guestEmail: z.string().optional(),
+  guestPhone: z.string().optional(),
   checkIn: z.string().min(1, "Date d'arrivée requise"),
   checkOut: z.string().min(1, 'Date de départ requise'),
   guests: z.number().min(1, 'Au moins 1 invité'),
@@ -23,6 +28,7 @@ const bookingSchema = z.object({
   totalPriceFCFA: z.number().min(0, 'Prix invalide'),
   source: z.enum(['airbnb', 'booking', 'direct', 'other']),
   status: z.enum(['inquiry', 'confirmed', 'checked_in', 'checked_out', 'cancelled']),
+  paymentStatus: z.enum(['pending', 'partial', 'paid']).optional(),
   notes: z.string().optional(),
 });
 
@@ -44,8 +50,13 @@ const BookingForm: React.FC<BookingFormProps> = ({
   onCancel,
 }) => {
   const { data: properties } = useProperties();
+  const { data: customers } = useCustomers();
   const { formatAmount, exchangeRate } = useCurrency();
   const [inputCurrency, setInputCurrency] = useState<InputCurrency>('EUR');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
 
   const {
     register,
@@ -67,11 +78,15 @@ const BookingForm: React.FC<BookingFormProps> = ({
           totalPriceFCFA: initialData.totalPriceFCFA,
           source: initialData.source,
           status: initialData.status,
+          paymentStatus: initialData.paymentStatus || 'pending',
           notes: initialData.notes || '',
         }
       : {
           propertyId: '',
           guestName: '',
+          customerId: undefined,
+          guestEmail: undefined,
+          guestPhone: undefined,
           checkIn: formatForInput(new Date()),
           checkOut: '',
           guests: 2,
@@ -79,9 +94,69 @@ const BookingForm: React.FC<BookingFormProps> = ({
           totalPriceFCFA: 0,
           source: 'airbnb',
           status: 'confirmed',
+          paymentStatus: 'pending',
           notes: '',
         },
   });
+
+  const guestName = watch('guestName');
+
+  // Filter customers based on search
+  const filteredCustomers = useMemo(() => {
+    if (!customers || !customerSearch || customerSearch.length < 2) return [];
+    const searchLower = customerSearch.toLowerCase();
+    return customers
+      .filter((c) => 
+        c.name.toLowerCase().includes(searchLower) ||
+        c.email?.toLowerCase().includes(searchLower) ||
+        c.phone?.toLowerCase().includes(searchLower)
+      )
+      .slice(0, 5); // Limit to 5 results
+  }, [customers, customerSearch]);
+
+  // Handle customer selection
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setValue('guestName', customer.name);
+    setValue('customerId', customer.id);
+    setValue('guestEmail', customer.email || '');
+    setValue('guestPhone', customer.phone || '');
+    setCustomerSearch(customer.name);
+    setShowCustomerDropdown(false);
+  };
+
+  // Handle guest name change
+  const handleGuestNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setValue('guestName', value);
+    setCustomerSearch(value);
+    
+    // Clear selected customer if name doesn't match
+    if (selectedCustomer && selectedCustomer.name !== value) {
+      setSelectedCustomer(null);
+      setValue('customerId', undefined);
+      setValue('guestEmail', undefined);
+      setValue('guestPhone', undefined);
+    }
+    
+    // Show dropdown if there are matches
+    if (value.length >= 2 && filteredCustomers.length > 0) {
+      setShowCustomerDropdown(true);
+    } else {
+      setShowCustomerDropdown(false);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const checkIn = watch('checkIn');
   const checkOut = watch('checkOut');
@@ -127,7 +202,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const handleFormSubmit = (data: BookingFormValues) => {
     const formData: BookingFormData = {
       propertyId: data.propertyId,
+      customerId: data.customerId,
       guestName: data.guestName,
+      guestEmail: data.guestEmail,
+      guestPhone: data.guestPhone,
       checkIn: data.checkIn,
       checkOut: data.checkOut,
       guests: data.guests,
@@ -135,6 +213,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
       totalPriceFCFA: data.totalPriceFCFA,
       source: data.source,
       status: data.status,
+      paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
     };
     onSubmit(formData);
@@ -159,14 +238,67 @@ const BookingForm: React.FC<BookingFormProps> = ({
         )}
       />
 
-      {/* Guest info */}
-      <Input
-        label="Nom du client"
-        placeholder="Jean Dupont"
-        error={errors.guestName?.message}
-        required
-        {...register('guestName')}
-      />
+      {/* Guest info with customer autocomplete */}
+      <div className="relative" ref={customerDropdownRef}>
+        <div className="relative">
+          <Input
+            label="Nom du client"
+            placeholder="Jean Dupont"
+            error={errors.guestName?.message}
+            required
+            value={guestName}
+            onChange={handleGuestNameChange}
+            onFocus={() => {
+              if (guestName && guestName.length >= 2 && filteredCustomers.length > 0) {
+                setShowCustomerDropdown(true);
+              }
+            }}
+          />
+          {selectedCustomer && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCustomer(null);
+                setValue('guestName', '');
+                setValue('customerId', undefined);
+                setValue('guestEmail', undefined);
+                setValue('guestPhone', undefined);
+                setCustomerSearch('');
+              }}
+              className="absolute right-2 top-8 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        
+        {/* Customer dropdown */}
+        {showCustomerDropdown && filteredCustomers.length > 0 && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {filteredCustomers.map((customer) => (
+              <button
+                key={customer.id}
+                type="button"
+                onClick={() => handleSelectCustomer(customer)}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+              >
+                <div className="font-medium text-gray-900">{customer.name}</div>
+                <div className="text-sm text-gray-500 mt-0.5">
+                  {customer.email && <span>{customer.email}</span>}
+                  {customer.email && customer.phone && <span> • </span>}
+                  {customer.phone && <span>{customer.phone}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        
+        {selectedCustomer && (
+          <p className="text-xs text-primary-600 mt-1">
+            ✓ Client existant sélectionné - Les informations seront pré-remplies lors du check-in
+          </p>
+        )}
+      </div>
 
       {/* Dates */}
       <div className="grid grid-cols-2 gap-4">
@@ -292,7 +424,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         </div>
       )}
 
-      {/* Source and status */}
+      {/* Source, status, and payment status */}
       <div className="grid grid-cols-2 gap-4">
         <Controller
           name="source"
@@ -319,6 +451,21 @@ const BookingForm: React.FC<BookingFormProps> = ({
           )}
         />
       </div>
+
+      {/* Payment status */}
+      <Controller
+        name="paymentStatus"
+        control={control}
+        render={({ field }) => (
+          <Select
+            label="Statut de paiement"
+            options={PAYMENT_STATUSES}
+            error={errors.paymentStatus?.message}
+            {...field}
+            value={field.value || 'pending'}
+          />
+        )}
+      />
 
       {/* Notes */}
       <TextArea

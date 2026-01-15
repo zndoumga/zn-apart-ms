@@ -38,6 +38,7 @@ export const BUCKETS = {
   EXPENSE_RECEIPTS: 'expense-receipts',
   MAINTENANCE_PHOTOS: 'maintenance-photos',
   CUSTOMER_DOCUMENTS: 'customer-documents',
+  INVOICES: 'invoices',
 } as const;
 
 export default supabase;

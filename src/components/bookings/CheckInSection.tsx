@@ -27,6 +27,8 @@ import SignatureCanvas from '../ui/SignatureCanvas';
 import { useProcessCheckIn } from '../../hooks/useCheckIn';
 import type { Booking, CheckInFormData, Customer } from '../../types';
 import { ID_TYPES } from '../../types';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface CheckInSectionProps {
   booking: Booking;
@@ -177,9 +179,11 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
   });
   const [idFileFront, setIdFileFront] = useState<File | null>(null);
   const [idFileBack, setIdFileBack] = useState<File | null>(null);
+  // Pre-populate ID document previews if customer already has them (returning customer)
   const [idPreviewFront, setIdPreviewFront] = useState<string | null>(customer?.idDocumentUrl || null);
   const [idPreviewBack, setIdPreviewBack] = useState<string | null>(customer?.idDocumentBackUrl || null);
-  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(customer?.signatureUrl || null);
+  // Always require a new signature, even for returning customers
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   
   const fileInputFrontRef = useRef<HTMLInputElement>(null);
   const fileInputBackRef = useRef<HTMLInputElement>(null);
@@ -218,9 +222,11 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
     }
     setIdFileFront(null);
     setIdFileBack(null);
+    // Pre-populate ID document previews if customer already has them (returning customer)
     setIdPreviewFront(customer?.idDocumentUrl || null);
     setIdPreviewBack(customer?.idDocumentBackUrl || null);
-    setSignatureDataUrl(customer?.signatureUrl || null);
+    // Always require a new signature, even for returning customers
+    setSignatureDataUrl(null);
   }, [booking.id]);
 
   const handleInputChange = (field: keyof CheckInFormData, value: string) => {
@@ -360,6 +366,12 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
               <span>Signature enregistrée</span>
             </div>
           )}
+          {booking.checkedInAt && (
+            <div className="flex items-center gap-1.5 text-sm text-emerald-700">
+              <Calendar className="w-4 h-4" />
+              <span>Check-in: {format(new Date(booking.checkedInAt), 'dd MMM yyyy à HH:mm', { locale: fr })}</span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -380,7 +392,10 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setIsEditing(true);
+                setShowDetails(true); // Ensure details are shown when editing
+              }}
               className="text-emerald-700"
             >
               <Pencil className="w-4 h-4 mr-1" />
@@ -538,18 +553,33 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
           {isEditing ? 'Modifier les informations' : 'Formulaire de check-in'}
         </h3>
         {(showForm || isEditing) && (
-          <button
-            onClick={() => {
-              if (isEditing) {
-                setIsEditing(false);
-              } else {
-                setShowForm(false);
-              }
-            }}
-            className="text-blue-700 hover:text-blue-800"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isEditing && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSubmit}
+                isLoading={processCheckIn.isPending}
+                disabled={processCheckIn.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle className="w-4 h-4 mr-1" />
+                Enregistrer
+              </Button>
+            )}
+            <button
+              onClick={() => {
+                if (isEditing) {
+                  setIsEditing(false);
+                } else {
+                  setShowForm(false);
+                }
+              }}
+              className="text-blue-700 hover:text-blue-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -664,27 +694,47 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
 
         {/* ID Document Upload - Front and Back */}
         <div className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Photos de la pièce d'identité
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Photos de la pièce d'identité
+            </label>
+            {customer && (customer.idDocumentUrl || customer.idDocumentBackUrl) && (
+              <span className="text-xs text-primary-600 bg-primary-50 px-2 py-1 rounded">
+                ✓ Pièce d'identité déjà enregistrée (optionnel de télécharger à nouveau)
+              </span>
+            )}
+          </div>
           
           {/* Front of ID */}
           <div>
             <p className="text-xs text-gray-500 mb-2">Recto (Face avant)</p>
             {idPreviewFront ? (
               <div className="relative inline-block">
-                <img
-                  src={idPreviewFront}
-                  alt="ID Document Front"
-                  className="max-h-40 rounded-lg border border-gray-200"
-                />
+                <div className="relative">
+                  <img
+                    src={idPreviewFront}
+                    alt="ID Document Front"
+                    className="max-h-40 rounded-lg border-2 border-primary-300"
+                  />
+                  {customer?.idDocumentUrl && !idFileFront && (
+                    <div className="absolute inset-0 bg-primary-500 bg-opacity-10 rounded-lg flex items-center justify-center">
+                      <span className="text-xs font-medium text-primary-700 bg-white px-2 py-1 rounded shadow">
+                        Déjà enregistré
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     setIdFileFront(null);
-                    setIdPreviewFront(null);
+                    // Only clear preview if it's a newly uploaded file, not an existing customer document
+                    if (!customer?.idDocumentUrl || idFileFront) {
+                      setIdPreviewFront(customer?.idDocumentUrl || null);
+                    }
                   }}
                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  title={customer?.idDocumentUrl && !idFileFront ? "Remplacer par un nouveau fichier" : "Supprimer"}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -717,18 +767,31 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
             <p className="text-xs text-gray-500 mb-2">Verso (Face arrière)</p>
             {idPreviewBack ? (
               <div className="relative inline-block">
-                <img
-                  src={idPreviewBack}
-                  alt="ID Document Back"
-                  className="max-h-40 rounded-lg border border-gray-200"
-                />
+                <div className="relative">
+                  <img
+                    src={idPreviewBack}
+                    alt="ID Document Back"
+                    className="max-h-40 rounded-lg border-2 border-primary-300"
+                  />
+                  {customer?.idDocumentBackUrl && !idFileBack && (
+                    <div className="absolute inset-0 bg-primary-500 bg-opacity-10 rounded-lg flex items-center justify-center">
+                      <span className="text-xs font-medium text-primary-700 bg-white px-2 py-1 rounded shadow">
+                        Déjà enregistré
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     setIdFileBack(null);
-                    setIdPreviewBack(null);
+                    // Only clear preview if it's a newly uploaded file, not an existing customer document
+                    if (!customer?.idDocumentBackUrl || idFileBack) {
+                      setIdPreviewBack(customer?.idDocumentBackUrl || null);
+                    }
                   }}
                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  title={customer?.idDocumentBackUrl && !idFileBack ? "Remplacer par un nouveau fichier" : "Supprimer"}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -765,8 +828,13 @@ const CheckInSection: React.FC<CheckInSectionProps> = ({
           </label>
           <SignatureCanvas
             onSignatureChange={setSignatureDataUrl}
-            initialSignature={signatureDataUrl || undefined}
+            initialSignature={undefined}
           />
+          {customer?.signatureUrl && (
+            <p className="text-xs text-gray-500 mt-2">
+              ⚠️ Une nouvelle signature est requise pour chaque check-in
+            </p>
+          )}
         </div>
 
         {/* Apartment Condition Notes */}

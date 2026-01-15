@@ -49,7 +49,7 @@ export function useUpcomingCheckIns() {
           return isFutureOrToday && hasValidStatus;
         })
         .sort((a: Booking, b: Booking) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime())
-        .slice(0, 3); // Return only the next 3 reservations
+        .slice(0, 5); // Return only the next 5 reservations
     },
   });
 }

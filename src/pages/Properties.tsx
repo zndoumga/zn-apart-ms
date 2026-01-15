@@ -30,7 +30,7 @@ type InputCurrency = 'EUR' | 'FCFA';
 
 const Properties: React.FC = () => {
   const { formatAmount, exchangeRate } = useCurrency();
-  const { isAdmin } = useMode();
+  const { isAdmin, isInvestor } = useMode();
   const { data: properties, isLoading } = useProperties();
   const createProperty = useCreateProperty();
   const updateProperty = useUpdateProperty();
@@ -755,9 +755,11 @@ const Properties: React.FC = () => {
             {properties?.length || 0} appartement(s) enregistré(s)
           </p>
         </div>
-        <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
-          Ajouter un appartement
-        </Button>
+        {!isInvestor && (
+          <Button onClick={handleOpenCreate} leftIcon={<Plus className="w-4 h-4" />}>
+            Ajouter un appartement
+          </Button>
+        )}
       </div>
 
       {/* Properties grid */}
@@ -766,10 +768,10 @@ const Properties: React.FC = () => {
           icon={<Building2 className="w-8 h-8 text-gray-400" />}
           title="Aucun appartement"
           description="Ajoutez votre premier appartement pour commencer."
-          action={{
+          action={!isInvestor ? {
             label: 'Ajouter un appartement',
             onClick: handleOpenCreate,
-          }}
+          } : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -836,18 +838,18 @@ const Properties: React.FC = () => {
         property={viewingProperty}
         isOpen={!!viewingProperty}
         onClose={() => setViewingProperty(null)}
-        onEdit={() => {
+        onEdit={!isInvestor ? () => {
           if (viewingProperty) {
             handleOpenEdit(viewingProperty);
             setViewingProperty(null);
           }
-        }}
-        onDelete={() => {
+        } : undefined}
+        onDelete={!isInvestor ? () => {
           if (viewingProperty) {
             setDeletingProperty(viewingProperty);
             setViewingProperty(null);
           }
-        }}
+        } : undefined}
         isAdmin={isAdmin}
       />
 

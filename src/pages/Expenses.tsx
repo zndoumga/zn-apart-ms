@@ -37,7 +37,7 @@ type SortField = 'date' | 'amount' | 'category';
 type SortDirection = 'asc' | 'desc';
 
 const Expenses: React.FC = () => {
-  const { isAdmin } = useMode();
+  const { isAdmin, isInvestor } = useMode();
   const { formatAmount } = useCurrency();
 
   // State
@@ -47,6 +47,7 @@ const Expenses: React.FC = () => {
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerPosition, setDatePickerPosition] = useState({ top: 0, left: 0 });
   const [showForm, setShowForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
@@ -62,6 +63,7 @@ const Expenses: React.FC = () => {
 
   // Refs
   const datePickerRef = useRef<HTMLDivElement>(null);
+  const datePickerButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Queries
@@ -72,19 +74,49 @@ const Expenses: React.FC = () => {
   const deleteExpense = useDeleteExpense();
   const bulkCreateExpenses = useBulkCreateExpenses();
 
-  // Close dropdowns when clicking outside
+  // Calculate popover position and close when clicking outside
   useEffect(() => {
+    const updatePosition = () => {
+      if (datePickerButtonRef.current && showDatePicker) {
+        const rect = datePickerButtonRef.current.getBoundingClientRect();
+        setDatePickerPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+        });
+      }
+    };
+
+    if (showDatePicker) {
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+      // Don't close if clicking on date inputs or their calendar popup
+      if (target.tagName === 'INPUT' && target.type === 'date') {
+        return;
+      }
+      // Don't close if clicking inside the popover
+      if (datePickerRef.current && !datePickerRef.current.contains(target)) {
         setShowDatePicker(false);
       }
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(target)) {
         setShowExportMenu(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDatePicker]);
 
   // Filter expenses
   const filteredExpenses = useMemo(() => {
@@ -358,19 +390,21 @@ const Expenses: React.FC = () => {
       header: '',
       render: (expense: Expense) => (
         <div className="flex gap-1 justify-end">
-          <Button
-            size="sm"
-            variant="outline"
-            className="p-2"
-            title="Modifier"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingExpense(expense);
-            }}
-          >
-            <Pencil className="w-4 h-4" />
-          </Button>
-          {isAdmin && (
+          {!isInvestor && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="p-2"
+              title="Modifier"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingExpense(expense);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          )}
+          {isAdmin && !isInvestor && (
             <Button
               size="sm"
               variant="outline"
@@ -467,13 +501,15 @@ const Expenses: React.FC = () => {
           >
             <Repeat className="w-5 h-5" />
           </Button>
-          <Button 
-            onClick={() => setShowForm(true)} 
-            className="p-2 bg-red-600 text-white hover:bg-red-700"
-            title="Nouvelle dépense"
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
+          {!isInvestor && (
+            <Button 
+              onClick={() => setShowForm(true)} 
+              className="p-2 bg-red-600 text-white hover:bg-red-700"
+              title="Nouvelle dépense"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -531,8 +567,9 @@ const Expenses: React.FC = () => {
             </select>
 
             {/* Date range picker */}
-            <div className="relative" ref={datePickerRef}>
+            <div className="relative">
               <button
+                ref={datePickerButtonRef}
                 onClick={() => setShowDatePicker(!showDatePicker)}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg transition-colors ${
                   dateRangeStart || dateRangeEnd
@@ -549,7 +586,11 @@ const Expenses: React.FC = () => {
               </button>
 
               {showDatePicker && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 min-w-[280px]">
+                <div 
+                  ref={datePickerRef}
+                  className="fixed bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-[9999] min-w-[280px]"
+                  style={{ top: `${datePickerPosition.top}px`, left: `${datePickerPosition.left}px` }}
+                >
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Du</label>
@@ -727,23 +768,25 @@ const Expenses: React.FC = () => {
                 </button>
 
                 {showDatePicker && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-[9999] isolate">
                     <div className="space-y-3">
-                      <div>
+                      <div onClick={(e) => e.stopPropagation()}>
                         <label className="block text-xs text-gray-500 mb-1">Du</label>
                         <input
                           type="date"
                           value={dateRangeStart}
                           onChange={(e) => setDateRangeStart(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
                           className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
-                      <div>
+                      <div onClick={(e) => e.stopPropagation()}>
                         <label className="block text-xs text-gray-500 mb-1">Au</label>
                         <input
                           type="date"
                           value={dateRangeEnd}
                           onChange={(e) => setDateRangeEnd(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
                           className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
@@ -876,18 +919,20 @@ const Expenses: React.FC = () => {
                           -{formatAmount(expense.amountEUR, expense.amountFCFA)}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="p-1.5"
-                        title="Modifier"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingExpense(expense);
-                        }}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                      {!isInvestor && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="p-1.5"
+                          title="Modifier"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingExpense(expense);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -920,7 +965,7 @@ const Expenses: React.FC = () => {
 
                   {/* Actions - Checkbox and Delete only (Edit is in header) */}
                   <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                    {isAdmin && (
+                    {isAdmin && !isInvestor && (
                       <>
                         <button
                           onClick={(e) => {

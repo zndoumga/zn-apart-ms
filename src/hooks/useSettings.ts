@@ -3,6 +3,8 @@ import {
   getSettings,
   updateSettings,
   changeAdminPassword,
+  changeInvestorPassword,
+  changeStaffPassword,
 } from '../services/settingsService';
 import type { Settings } from '../types';
 import { useAppStore, useToast } from '../store/useAppStore';
@@ -55,6 +57,58 @@ export function useChangeAdminPassword() {
     onSuccess: (changed) => {
       if (changed) {
         success('Mot de passe modifié', 'Le mot de passe admin a été changé.');
+      } else {
+        error('Erreur', 'Mot de passe actuel incorrect.');
+      }
+    },
+    onError: (err) => {
+      error('Erreur', 'Impossible de changer le mot de passe.');
+      console.error(err);
+    },
+  });
+}
+
+export function useChangeInvestorPassword() {
+  const { success, error } = useToast();
+  const mode = useAppStore((state) => state.mode);
+
+  return useMutation({
+    mutationFn: ({
+      currentPassword,
+      newPassword,
+    }: {
+      currentPassword: string;
+      newPassword: string;
+    }) => changeInvestorPassword(currentPassword, newPassword, mode),
+    onSuccess: (changed) => {
+      if (changed) {
+        success('Mot de passe modifié', 'Le mot de passe investisseur a été changé.');
+      } else {
+        error('Erreur', 'Mot de passe actuel incorrect.');
+      }
+    },
+    onError: (err) => {
+      error('Erreur', 'Impossible de changer le mot de passe.');
+      console.error(err);
+    },
+  });
+}
+
+export function useChangeStaffPassword() {
+  const { success, error } = useToast();
+  const mode = useAppStore((state) => state.mode);
+
+  return useMutation({
+    mutationFn: ({
+      currentPassword,
+      newPassword,
+    }: {
+      currentPassword: string;
+      newPassword: string;
+    }) => changeStaffPassword(currentPassword, newPassword, mode),
+    onSuccess: (changed) => {
+      if (changed) {
+        success('Mot de passe modifié', 'Le mot de passe staff a été changé.');
       } else {
         error('Erreur', 'Mot de passe actuel incorrect.');
       }

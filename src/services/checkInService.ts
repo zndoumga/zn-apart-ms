@@ -1,6 +1,7 @@
 import { supabase, TABLES, BUCKETS } from './supabase';
 import type { CheckInFormData, Customer, UserMode } from '../types';
 import { logAction } from './auditService';
+import { getCustomer } from './customerService';
 
 /**
  * Upload a file to customer documents bucket
@@ -59,72 +60,75 @@ export async function processCheckIn(
   signatureDataUrl: string | null,
   performedBy: UserMode
 ): Promise<Customer> {
-  // First, check if customer exists by email or create new
-  let customerId: string | null = null;
+  // Get the booking to find the customer
+  const { getBooking } = await import('./bookingService');
+  const booking = await getBooking(bookingId);
   
-  if (checkInData.email) {
-    const { data: existingCustomer } = await supabase
-      .from(TABLES.CUSTOMERS)
-      .select('id')
-      .eq('email', checkInData.email)
-      .single();
-    
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
+  if (!booking) {
+    throw new Error('Booking not found');
+  }
+
+  // Customer should already exist from booking creation
+  // If not, find or create one
+  let customerId: string | null = booking.customerId || null;
+  
+  if (!customerId) {
+    // Fallback: try to find by email or create
+    const { findOrCreateCustomerFromBooking } = await import('./customerService');
+    try {
+      const customer = await findOrCreateCustomerFromBooking(
+        checkInData.guestName,
+        checkInData.email,
+        checkInData.phone,
+        performedBy
+      );
+      customerId = customer.id;
+    } catch (error) {
+      console.error('Error finding/creating customer during check-in:', error);
+      throw new Error('Could not find or create customer');
     }
   }
 
-  // Prepare customer data
+  // Get existing customer
+  let customer = await getCustomer(customerId);
+  
+  if (!customer) {
+    throw new Error('Customer not found');
+  }
+
+  // Prepare customer update data (only update fields that are provided)
   const customerData: Record<string, unknown> = {
-    name: checkInData.guestName,
-    email: checkInData.email || null,
-    phone: checkInData.phone || null,
-    nationality: checkInData.nationality,
-    country_of_residence: checkInData.countryOfResidence || null,
-    address: checkInData.address || null,
-    date_of_birth: checkInData.dateOfBirth || null,
-    id_type: checkInData.idType,
-    id_number: checkInData.idNumber,
     updated_at: new Date().toISOString(),
   };
 
-  let customer: Customer;
+  // Update basic info if provided
+  if (checkInData.guestName) customerData.name = checkInData.guestName;
+  if (checkInData.email) customerData.email = checkInData.email;
+  if (checkInData.phone) customerData.phone = checkInData.phone;
+  if (checkInData.nationality) customerData.nationality = checkInData.nationality;
+  if (checkInData.countryOfResidence !== undefined) customerData.country_of_residence = checkInData.countryOfResidence;
+  if (checkInData.address !== undefined) customerData.address = checkInData.address;
+  if (checkInData.dateOfBirth) customerData.date_of_birth = checkInData.dateOfBirth;
+  if (checkInData.idType) customerData.id_type = checkInData.idType;
+  if (checkInData.idNumber) customerData.id_number = checkInData.idNumber;
 
-  if (customerId) {
-    // Update existing customer
-    const { data, error } = await supabase
-      .from(TABLES.CUSTOMERS)
-      .update(customerData)
-      .eq('id', customerId)
-      .select()
-      .single();
+  // Update customer with new information
+  const { data: updatedCustomerData, error: updateError } = await supabase
+    .from(TABLES.CUSTOMERS)
+    .update(customerData)
+    .eq('id', customerId)
+    .select()
+    .single();
 
-    if (error) {
-      console.error('Error updating customer:', error);
-      throw error;
-    }
-    customer = mapCustomerFromDB(data);
-  } else {
-    // Create new customer
-    const { data, error } = await supabase
-      .from(TABLES.CUSTOMERS)
-      .insert({
-        ...customerData,
-        total_bookings: 1,
-        total_spent_eur: 0,
-        total_spent_fcfa: 0,
-        is_vip: false,
-        tags: [],
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating customer:', error);
-      throw error;
-    }
-    customer = mapCustomerFromDB(data);
-    customerId = customer.id;
+  if (updateError) {
+    console.error('Error updating customer:', updateError);
+    throw updateError;
+  }
+  
+  // Re-fetch customer to get updated data
+  customer = await getCustomer(customerId);
+  if (!customer) {
+    throw new Error('Customer not found after update');
   }
 
   // Upload ID document front if provided
@@ -158,14 +162,21 @@ export async function processCheckIn(
     customer.signatureUrl = signatureUrl;
   }
 
-  // Link customer to booking and update booking status
+  // Record check-in date and time
+  const checkedInAt = new Date().toISOString();
+
+  // Link customer to booking, update booking status, and overwrite guest name with check-in form name
   await supabase
     .from(TABLES.BOOKINGS)
     .update({ 
       customer_id: customerId,
       status: 'checked_in',
+      guest_name: checkInData.guestName.trim(), // Overwrite guest name with name from check-in form
+      guest_email: checkInData.email || booking.guestEmail || null,
+      guest_phone: checkInData.phone || booking.guestPhone || null,
       check_in_notes: checkInData.checkInNotes || null,
-      updated_at: new Date().toISOString(),
+      checked_in_at: checkedInAt, // Record the exact date and time of check-in
+      updated_at: checkedInAt,
     })
     .eq('id', bookingId);
 
@@ -182,50 +193,47 @@ export async function processCheckIn(
 }
 
 /**
- * Get customer by ID
+ * Undo check-in: revert booking status from checked_in back to confirmed
  */
-export async function getCustomer(customerId: string): Promise<Customer | null> {
-  const { data, error } = await supabase
-    .from(TABLES.CUSTOMERS)
-    .select('*')
-    .eq('id', customerId)
-    .single();
+export async function undoCheckIn(
+  bookingId: string,
+  performedBy: UserMode
+): Promise<void> {
+  const { getBooking } = await import('./bookingService');
+  const booking = await getBooking(bookingId);
+  
+  if (!booking) {
+    throw new Error('Booking not found');
+  }
+
+  if (booking.status !== 'checked_in') {
+    throw new Error('Booking is not checked in');
+  }
+
+  // Revert booking status to confirmed and clear check-in timestamp
+  const { error } = await supabase
+    .from(TABLES.BOOKINGS)
+    .update({ 
+      status: 'confirmed',
+      checked_in_at: null, // Clear check-in timestamp when undoing
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', bookingId);
 
   if (error) {
-    if (error.code === 'PGRST116') return null;
-    console.error('Error fetching customer:', error);
+    console.error('Error undoing check-in:', error);
     throw error;
   }
 
-  return data ? mapCustomerFromDB(data) : null;
+  // Log the action
+  await logAction({
+    action: 'update',
+    entity: 'booking',
+    entityId: bookingId,
+    performedBy,
+    previousData: { status: 'checked_in' },
+    newData: { status: 'confirmed', action: 'undo_check_in' },
+  });
 }
 
-// Helper function to map database row to Customer type
-function mapCustomerFromDB(row: Record<string, unknown>): Customer {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    email: (row.email as string) || undefined,
-    phone: (row.phone as string) || undefined,
-    nationality: (row.nationality as string) || undefined,
-    countryOfResidence: (row.country_of_residence as string) || undefined,
-    address: (row.address as string) || undefined,
-    dateOfBirth: row.date_of_birth ? new Date(row.date_of_birth as string) : undefined,
-    idType: (row.id_type as Customer['idType']) || undefined,
-    idNumber: (row.id_number as string) || undefined,
-    idDocumentUrl: (row.id_document_url as string) || undefined,
-    idDocumentBackUrl: (row.id_document_back_url as string) || undefined,
-    signatureUrl: (row.signature_url as string) || undefined,
-    preferredLanguage: (row.preferred_language as string) || 'fr',
-    notes: (row.notes as string) || undefined,
-    totalBookings: (row.total_bookings as number) || 0,
-    totalSpentEUR: (row.total_spent_eur as number) || 0,
-    totalSpentFCFA: (row.total_spent_fcfa as number) || 0,
-    averageRating: (row.average_rating as number) || undefined,
-    isVIP: (row.is_vip as boolean) || false,
-    tags: (row.tags as string[]) || [],
-    createdAt: new Date(row.created_at as string),
-    updatedAt: new Date(row.updated_at as string),
-  };
-}
 

@@ -36,6 +36,14 @@ const staffNavigation: NavItem[] = [
   { name: 'Demandes', href: '/requests', icon: MessageSquare },
 ];
 
+const investorNavigation: NavItem[] = [
+  { name: 'Vue d\'ensemble', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Réservations', href: '/bookings', icon: Calendar },
+  { name: 'Dépenses', href: '/expenses', icon: Receipt },
+  { name: 'Tableau de bord KPI', href: '/finances', icon: BarChart3 },
+  { name: 'Appartements', href: '/properties', icon: Building2 },
+];
+
 const adminNavigation: NavItem[] = [
   { name: 'Vue d\'ensemble', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Réservations', href: '/bookings', icon: Calendar },
@@ -52,14 +60,14 @@ const adminNavigation: NavItem[] = [
 ];
 
 const Sidebar: React.FC = () => {
-  const { isAdmin } = useMode();
+  const { isAdmin, isInvestor } = useMode();
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const mobileMenuOpen = useAppStore((state) => state.mobileMenuOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const setMobileMenuOpen = useAppStore((state) => state.setMobileMenuOpen);
   const location = useLocation();
 
-  const navigation = isAdmin ? adminNavigation : staffNavigation;
+  const navigation = isAdmin ? adminNavigation : isInvestor ? investorNavigation : staffNavigation;
 
   // Close mobile menu on navigation
   const handleNavClick = () => {
@@ -158,23 +166,23 @@ const Sidebar: React.FC = () => {
         <div
           className={clsx(
             'flex items-center gap-3 px-3 py-2.5 rounded-xl',
-            isAdmin ? 'bg-indigo-50' : 'bg-emerald-50'
+            isAdmin ? 'bg-indigo-50' : isInvestor ? 'bg-amber-50' : 'bg-emerald-50'
           )}
         >
           <div
             className={clsx(
               'w-2 h-2 rounded-full',
-              isAdmin ? 'bg-indigo-500' : 'bg-emerald-500'
+              isAdmin ? 'bg-indigo-500' : isInvestor ? 'bg-amber-500' : 'bg-emerald-500'
             )}
           />
           {(sidebarOpen || mobileMenuOpen) && (
             <span
               className={clsx(
                 'text-sm font-medium animate-fadeIn',
-                isAdmin ? 'text-indigo-700' : 'text-emerald-700'
+                isAdmin ? 'text-indigo-700' : isInvestor ? 'text-amber-700' : 'text-emerald-700'
               )}
             >
-              Mode {isAdmin ? 'Admin' : 'Staff'}
+              Mode {isAdmin ? 'Admin' : isInvestor ? 'Investisseur' : 'Staff'}
             </span>
           )}
         </div>

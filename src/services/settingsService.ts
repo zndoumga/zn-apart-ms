@@ -7,6 +7,8 @@ const DEFAULT_SETTINGS: Omit<Settings, 'updatedAt'> = {
   lowBalanceThreshold: 100,
   defaultCurrency: 'EUR',
   adminPasswordHash: 'admin123', // Simple password - in production, use proper hashing
+  investorPasswordHash: 'invest-2025', // Simple password - in production, use proper hashing
+  staffPasswordHash: 'Bins2026', // Simple password - in production, use proper hashing
 };
 
 /**
@@ -41,6 +43,8 @@ async function createDefaultSettings(): Promise<Settings> {
     low_balance_threshold: DEFAULT_SETTINGS.lowBalanceThreshold,
     default_currency: DEFAULT_SETTINGS.defaultCurrency,
     admin_password_hash: DEFAULT_SETTINGS.adminPasswordHash,
+    investor_password_hash: DEFAULT_SETTINGS.investorPasswordHash,
+    staff_password_hash: DEFAULT_SETTINGS.staffPasswordHash,
   };
 
   const { data, error } = await supabase
@@ -74,6 +78,8 @@ export async function updateSettings(
   if (updates.lowBalanceThreshold !== undefined) updateData.low_balance_threshold = updates.lowBalanceThreshold;
   if (updates.defaultCurrency !== undefined) updateData.default_currency = updates.defaultCurrency;
   if (updates.adminPasswordHash !== undefined) updateData.admin_password_hash = updates.adminPasswordHash;
+  if (updates.investorPasswordHash !== undefined) updateData.investor_password_hash = updates.investorPasswordHash;
+  if (updates.staffPasswordHash !== undefined) updateData.staff_password_hash = updates.staffPasswordHash;
 
   const { data, error } = await supabase
     .from(TABLES.SETTINGS)
@@ -127,6 +133,58 @@ export async function changeAdminPassword(
   return true;
 }
 
+/**
+ * Verify investor password
+ */
+export async function verifyInvestorPassword(password: string): Promise<boolean> {
+  const settings = await getSettings();
+  // Simple comparison - in production, use proper password hashing
+  return password === settings.investorPasswordHash;
+}
+
+/**
+ * Change investor password
+ */
+export async function changeInvestorPassword(
+  currentPassword: string,
+  newPassword: string,
+  performedBy: UserMode
+): Promise<boolean> {
+  const isValid = await verifyInvestorPassword(currentPassword);
+  if (!isValid) {
+    return false;
+  }
+
+  await updateSettings({ investorPasswordHash: newPassword }, performedBy);
+  return true;
+}
+
+/**
+ * Verify staff password
+ */
+export async function verifyStaffPassword(password: string): Promise<boolean> {
+  const settings = await getSettings();
+  // Simple comparison - in production, use proper password hashing
+  return password === settings.staffPasswordHash;
+}
+
+/**
+ * Change staff password
+ */
+export async function changeStaffPassword(
+  currentPassword: string,
+  newPassword: string,
+  performedBy: UserMode
+): Promise<boolean> {
+  const isValid = await verifyStaffPassword(currentPassword);
+  if (!isValid) {
+    return false;
+  }
+
+  await updateSettings({ staffPasswordHash: newPassword }, performedBy);
+  return true;
+}
+
 // Helper function to map database row to Settings type
 function mapSettingsFromDB(row: Record<string, unknown>): Settings {
   return {
@@ -134,6 +192,8 @@ function mapSettingsFromDB(row: Record<string, unknown>): Settings {
     lowBalanceThreshold: (row.low_balance_threshold as number) || DEFAULT_SETTINGS.lowBalanceThreshold,
     defaultCurrency: (row.default_currency as Settings['defaultCurrency']) || DEFAULT_SETTINGS.defaultCurrency,
     adminPasswordHash: (row.admin_password_hash as string) || DEFAULT_SETTINGS.adminPasswordHash,
+    investorPasswordHash: (row.investor_password_hash as string) || DEFAULT_SETTINGS.investorPasswordHash,
+    staffPasswordHash: (row.staff_password_hash as string) || DEFAULT_SETTINGS.staffPasswordHash,
     updatedAt: new Date(row.updated_at as string),
   };
 }

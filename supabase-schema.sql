@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   status VARCHAR(20) NOT NULL DEFAULT 'confirmed',
   source VARCHAR(20) NOT NULL DEFAULT 'direct',
   notes TEXT,
+  check_in_notes TEXT,
+  checked_in_at TIMESTAMPTZ,
   payment_status VARCHAR(20) DEFAULT 'pending',
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),

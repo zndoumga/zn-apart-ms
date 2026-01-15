@@ -197,14 +197,60 @@ const ExpenseDetailsModal: React.FC<ExpenseDetailsModalProps> = ({
           </p>
         </div>
 
-        {/* Description */}
-        <div className="bg-gray-50 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Description
-          </h3>
-          <p className="font-medium text-gray-900">{expense.description}</p>
-        </div>
+        {/* Items List */}
+        {expense.items && expense.items.length > 0 ? (
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Articles
+            </h3>
+            <div className="space-y-3">
+              {expense.items.map((item, index) => (
+                <div key={item.id || index} className="bg-white rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 mb-1">{item.itemName}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>Qté: {item.quantity}</span>
+                        <span className="font-semibold text-danger-600">
+                          -{formatAmount(item.amountEUR, item.amountFCFA)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Total:</span>
+                <span className="text-xl font-bold text-danger-700">
+                  -{formatAmount(expense.amountEUR, expense.amountFCFA)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Fallback for expenses without items (backward compatibility)
+          <>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h3 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Description
+              </h3>
+              <p className="font-medium text-gray-900">{expense.description || 'Aucune description'}</p>
+            </div>
+            <div className="bg-danger-50 rounded-xl p-4">
+              <h3 className="text-sm font-medium text-danger-600 mb-3 flex items-center gap-2">
+                <Tag className="w-4 h-4" />
+                Montant
+              </h3>
+              <p className="text-2xl font-bold text-danger-700">
+                -{formatAmount(expense.amountEUR, expense.amountFCFA)}
+              </p>
+            </div>
+          </>
+        )}
 
         {/* Date & Property */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -228,17 +274,6 @@ const ExpenseDetailsModal: React.FC<ExpenseDetailsModalProps> = ({
               {property?.name || (expense.propertyId ? 'Unknown' : 'Général')}
             </p>
           </div>
-        </div>
-
-        {/* Amount */}
-        <div className="bg-danger-50 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-danger-600 mb-3 flex items-center gap-2">
-            <Tag className="w-4 h-4" />
-            Montant
-          </h3>
-          <p className="text-2xl font-bold text-danger-700">
-            -{formatAmount(expense.amountEUR, expense.amountFCFA)}
-          </p>
         </div>
 
         {/* Receipt */}

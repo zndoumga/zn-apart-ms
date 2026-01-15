@@ -12,6 +12,7 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   showCloseButton?: boolean;
   footer?: React.ReactNode;
+  blocking?: boolean; // If true, modal cannot be closed (no close button, no overlay click, no ESC)
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -23,6 +24,7 @@ const Modal: React.FC<ModalProps> = ({
   size = 'md',
   showCloseButton = true,
   footer,
+  blocking = false,
 }) => {
   const sizes = {
     sm: 'max-w-md',
@@ -34,7 +36,7 @@ const Modal: React.FC<ModalProps> = ({
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-50" onClose={blocking ? () => {} : onClose}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -83,7 +85,7 @@ const Modal: React.FC<ModalProps> = ({
                         </Dialog.Description>
                       )}
                     </div>
-                    {showCloseButton && (
+                    {showCloseButton && !blocking && (
                       <button
                         type="button"
                         className="rounded-lg p-1 text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"

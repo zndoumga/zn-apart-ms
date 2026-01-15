@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -13,6 +14,7 @@ import {
   X,
   ChevronDown,
   ClipboardCheck,
+  FileText,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -27,6 +29,7 @@ import BookingForm from '../components/bookings/BookingForm';
 import BookingCalendar from '../components/bookings/BookingCalendar';
 import BookingImportModal from '../components/bookings/BookingImportModal';
 import BookingDetailsModal from '../components/bookings/BookingDetailsModal';
+import InvoicePreviewModal from '../components/invoices/InvoicePreviewModal';
 import { 
   useBookings, 
   useCreateBooking, 
@@ -38,15 +41,26 @@ import { useProperties } from '../hooks/useProperties';
 import { useCurrency, useMode } from '../store/useAppStore';
 import { formatDate } from '../utils/dates';
 import { exportBookings, type ExportFormat } from '../utils/export';
-import type { Booking, BookingFormData, BookingStatus } from '../types';
+import type { Booking, BookingFormData, BookingStatus, PaymentStatus, Customer } from '../types';
 import { BOOKING_STATUSES, BOOKING_SOURCES } from '../types';
 import { differenceInDays, format } from 'date-fns';
+import { generateInvoicePDF, findExistingInvoice } from '../services/invoiceService';
+import { getCustomer } from '../services/customerService';
+import { useToast } from '../store/useAppStore';
 
 type SortField = 'checkIn' | 'duration' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
 const Bookings: React.FC = () => {
-  const { isAdmin } = useMode();
+  const { isAdmin, isInvestor } = useMode();
+  const { addToast } = useToast();
+  const [generatingInvoice, setGeneratingInvoice] = useState<string | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<{
+    invoiceNumber: string;
+    pdfUrl: string;
+    booking: Booking;
+    customer?: Customer;
+  } | null>(null);
   const { formatAmount } = useCurrency();
 
   // State
@@ -60,6 +74,7 @@ const Bookings: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('checkIn');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerPosition, setDatePickerPosition] = useState({ top: 0, left: 0 });
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
@@ -67,17 +82,51 @@ const Bookings: React.FC = () => {
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
 
   const datePickerRef = useRef<HTMLDivElement>(null);
+  const datePickerButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Close date picker when clicking outside
+  // Calculate popover position and close when clicking outside
   useEffect(() => {
+    const updatePosition = () => {
+      if (datePickerButtonRef.current && showDatePicker) {
+        const rect = datePickerButtonRef.current.getBoundingClientRect();
+        setDatePickerPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+        });
+      }
+    };
+
+    if (showDatePicker) {
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+      // Don't close if clicking on date inputs or their calendar popup
+      if (target.tagName === 'INPUT' && target.type === 'date') {
+        return;
+      }
+      // Don't close if clicking inside the popover
+      if (datePickerRef.current && !datePickerRef.current.contains(target)) {
         setShowDatePicker(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDatePicker]);
+
+  // URL parameters
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Queries
   const { data: bookings, isLoading } = useBookings();
@@ -86,6 +135,49 @@ const Bookings: React.FC = () => {
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
   const bulkCreateBookings = useBulkCreateBookings();
+
+  // Handle URL parameters for edit/new/delete/view
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    const newParam = searchParams.get('new');
+    const deleteId = searchParams.get('delete');
+    const viewId = searchParams.get('view');
+
+    if (editId && bookings && !editingBooking) {
+      const booking = bookings.find((b) => b.id === editId);
+      if (booking) {
+        setEditingBooking(booking);
+        // Remove the edit parameter from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('edit');
+        setSearchParams(newParams, { replace: true });
+      }
+    } else if (newParam === 'true' && !showForm) {
+      setShowForm(true);
+      // Remove the new parameter from URL
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('new');
+      setSearchParams(newParams, { replace: true });
+    } else if (deleteId && bookings && !deletingBooking) {
+      const booking = bookings.find((b) => b.id === deleteId);
+      if (booking) {
+        setDeletingBooking(booking);
+        // Remove the delete parameter from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('delete');
+        setSearchParams(newParams, { replace: true });
+      }
+    } else if (viewId && bookings && !viewingBooking) {
+      const booking = bookings.find((b) => b.id === viewId);
+      if (booking) {
+        setViewingBooking(booking);
+        // Remove the view parameter from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('view');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [searchParams, bookings, setSearchParams, editingBooking, showForm, deletingBooking, viewingBooking]);
 
   // Calculate stay duration
   const getStayDuration = (booking: Booking): number => {
@@ -182,15 +274,37 @@ const Bookings: React.FC = () => {
     return <Badge variant={variants[status]}>{labels[status]}</Badge>;
   };
 
+  const getPaymentStatusBadge = (status: PaymentStatus) => {
+    const variants: Record<PaymentStatus, 'success' | 'warning' | 'gray'> = {
+      paid: 'success',
+      partial: 'warning',
+      pending: 'gray',
+    };
+    const labels: Record<PaymentStatus, string> = {
+      paid: 'Payé',
+      partial: 'Partiel',
+      pending: 'En attente',
+    };
+    return <Badge variant={variants[status]} size="sm">{labels[status]}</Badge>;
+  };
+
   const handleCreate = async (data: BookingFormData) => {
     await createBooking.mutateAsync(data);
     setShowForm(false);
+    // Clear any URL parameters
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('new');
+    setSearchParams(newParams, { replace: true });
   };
 
   const handleUpdate = async (data: BookingFormData) => {
     if (!editingBooking) return;
     await updateBooking.mutateAsync({ id: editingBooking.id, data });
     setEditingBooking(null);
+    // Clear any URL parameters
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('edit');
+    setSearchParams(newParams, { replace: true });
   };
 
   const handleDelete = async () => {
@@ -202,6 +316,139 @@ const Bookings: React.FC = () => {
   const handleImport = async (bookingsData: BookingFormData[]) => {
     await bulkCreateBookings.mutateAsync(bookingsData);
     setShowImport(false);
+  };
+
+  const handleGenerateInvoice = async (booking: Booking) => {
+    if (!properties) return;
+    
+    const property = properties.find(p => p.id === booking.propertyId);
+    if (!property) {
+      addToast({
+        type: 'error',
+        title: 'Erreur',
+        message: 'Propriété introuvable pour cette réservation.',
+      });
+      return;
+    }
+
+    setGeneratingInvoice(booking.id);
+    
+    try {
+      // Fetch customer if available
+      let customer: Customer | undefined = undefined;
+      if (booking.customerId) {
+        try {
+          customer = await getCustomer(booking.customerId);
+        } catch (err) {
+          console.warn('Could not fetch customer:', err);
+        }
+      }
+
+      // Always check for existing invoice first - use it if found
+      const existingInvoice = await findExistingInvoice(booking);
+      
+      if (existingInvoice) {
+        // Use existing invoice - don't create a new one
+        setInvoicePreview({
+          invoiceNumber: existingInvoice.invoiceNumber,
+          pdfUrl: existingInvoice.pdfUrl,
+          booking,
+          customer,
+        });
+        
+        addToast({
+          type: 'success',
+          title: 'Facture chargée',
+          message: `Facture ${existingInvoice.invoiceNumber} chargée.`,
+        });
+      } else {
+        // Only generate new invoice if none exists
+        const { invoiceNumber, pdfUrl } = await generateInvoicePDF(booking, property, customer);
+        
+        // Show preview modal instead of auto-download
+        setInvoicePreview({
+          invoiceNumber,
+          pdfUrl,
+          booking,
+          customer,
+        });
+
+        addToast({
+          type: 'success',
+          title: 'Facture générée',
+          message: `La facture ${invoiceNumber} a été générée avec succès.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      addToast({
+        type: 'error',
+        title: 'Erreur',
+        message: 'Impossible de générer la facture. Veuillez réessayer.',
+      });
+    } finally {
+      setGeneratingInvoice(null);
+    }
+  };
+
+  const handleDownloadInvoice = () => {
+    if (!invoicePreview) return;
+    
+    // Create a temporary link to download the PDF
+    const link = document.createElement('a');
+    link.href = invoicePreview.pdfUrl;
+    link.download = `${invoicePreview.invoiceNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    addToast({
+      type: 'success',
+      title: 'Téléchargement',
+      message: 'La facture a été téléchargée.',
+    });
+  };
+
+  const handleSendEmail = async (email: string) => {
+    if (!invoicePreview) return;
+    
+    // Create mailto link with subject and body
+    const subject = encodeURIComponent(`Facture ${invoicePreview.invoiceNumber} - ZN Enterprises`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver ci-joint la facture ${invoicePreview.invoiceNumber} pour votre réservation.\n\nCordialement,\nZN Enterprises`
+    );
+    
+    // For now, open mailto link (in production, you might want to use an email service)
+    const mailtoLink = `mailto:${email}?subject=${subject}&body=${body}`;
+    window.location.href = mailtoLink;
+    
+    addToast({
+      type: 'success',
+      title: 'Email',
+      message: 'L\'application email s\'ouvre avec la facture.',
+    });
+  };
+
+  const handleSendWhatsApp = (phone: string) => {
+    if (!invoicePreview) return;
+    
+    // Format phone number (remove spaces, +, etc.)
+    const cleanPhone = phone.replace(/[\s\+\-\(\)]/g, '');
+    
+    // Create WhatsApp link
+    const message = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver votre facture ${invoicePreview.invoiceNumber} :\n${invoicePreview.pdfUrl}\n\nCordialement,\nZN Enterprises`
+    );
+    
+    // Use WhatsApp Web API
+    const whatsappLink = `https://wa.me/${cleanPhone}?text=${message}`;
+    window.open(whatsappLink, '_blank');
+    
+    addToast({
+      type: 'success',
+      title: 'WhatsApp',
+      message: 'WhatsApp s\'ouvre avec le message.',
+    });
   };
 
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -322,9 +569,31 @@ const Bookings: React.FC = () => {
     {
       key: 'actions',
       header: '',
-      render: (booking: Booking) => (
-        <div className="flex gap-1 justify-end">
-          {booking.status === 'confirmed' && (
+      render: (booking: Booking) => {
+        const canGenerateInvoice = 
+          booking.status === 'checked_in' || 
+          booking.status === 'checked_out' || 
+          booking.paymentStatus === 'paid';
+        
+        return (
+          <div className="flex gap-1 justify-end">
+            {canGenerateInvoice && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="p-2 border-blue-300 text-blue-600 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                title="Générer facture"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleGenerateInvoice(booking);
+                }}
+                isLoading={generatingInvoice === booking.id}
+                disabled={generatingInvoice !== null}
+              >
+                <FileText className="w-4 h-4" />
+              </Button>
+            )}
+            {booking.status === 'confirmed' && (
             <Button
               size="sm"
               variant="outline"
@@ -338,19 +607,21 @@ const Bookings: React.FC = () => {
               <ClipboardCheck className="w-4 h-4" />
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="p-2"
-            title="Modifier"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingBooking(booking);
-            }}
-          >
-            <Pencil className="w-4 h-4" />
-          </Button>
-          {isAdmin && (
+          {!isInvestor && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="p-2"
+              title="Modifier"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingBooking(booking);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          )}
+          {isAdmin && !isInvestor && (
             <Button
               size="sm"
               variant="outline"
@@ -365,7 +636,8 @@ const Bookings: React.FC = () => {
             </Button>
           )}
         </div>
-      ),
+        );
+      },
     },
   ];
 
@@ -422,13 +694,15 @@ const Bookings: React.FC = () => {
               </Button>
             </>
           )}
-          <Button 
-            onClick={() => setShowForm(true)} 
-            className="p-2"
-            title="Nouvelle réservation"
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
+          {!isInvestor && (
+            <Button 
+              onClick={() => setShowForm(true)} 
+              className="p-2"
+              title="Nouvelle réservation"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -503,8 +777,9 @@ const Bookings: React.FC = () => {
             )}
 
             {/* Date range button with popover */}
-            <div className="relative" ref={datePickerRef}>
+            <div className="relative">
               <button
+                ref={datePickerButtonRef}
                 onClick={() => setShowDatePicker(!showDatePicker)}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer hover:bg-gray-50 ${
                   dateRangeStart || dateRangeEnd ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
@@ -524,22 +799,28 @@ const Bookings: React.FC = () => {
               </button>
               
               {showDatePicker && (
-                <div className="absolute top-full left-0 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[280px]">
+                <div 
+                  ref={datePickerRef}
+                  className="fixed p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] min-w-[280px]"
+                  style={{ top: `${datePickerPosition.top}px`, left: `${datePickerPosition.left}px` }}
+                >
                   <div className="space-y-3">
-                    <div>
+                    <div onClick={(e) => e.stopPropagation()}>
                       <label className="block text-xs text-gray-500 mb-1">Du</label>
                       <DatePicker
                         value={dateRangeStart}
                         onChange={(date) => setDateRangeStart(date)}
                         className="w-full"
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
-                    <div>
+                    <div onClick={(e) => e.stopPropagation()}>
                       <label className="block text-xs text-gray-500 mb-1">Au</label>
                       <DatePicker
                         value={dateRangeEnd}
                         onChange={(date) => setDateRangeEnd(date)}
                         className="w-full"
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                     <div className="flex gap-2 pt-2 border-t">
@@ -728,7 +1009,7 @@ const Bookings: React.FC = () => {
                   </button>
                   
                   {showDatePicker && (
-                    <div className="absolute top-full left-0 right-0 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                    <div className="absolute top-full left-0 right-0 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] isolate">
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Du</label>
@@ -791,7 +1072,7 @@ const Bookings: React.FC = () => {
                   </button>
                   
                   {showDatePicker && (
-                    <div className="absolute top-full left-0 right-0 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                    <div className="absolute top-full left-0 right-0 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] isolate">
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Du</label>
@@ -972,18 +1253,20 @@ const Bookings: React.FC = () => {
                             <ClipboardCheck className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="p-1.5"
-                          title="Modifier"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingBooking(booking);
-                          }}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        {!isInvestor && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="p-1.5"
+                            title="Modifier"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingBooking(booking);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -1010,9 +1293,10 @@ const Bookings: React.FC = () => {
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                       <div>
                         <p className="text-xs text-gray-500 mb-0.5">Total</p>
-                        <p className="text-sm font-semibold text-gray-900">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">
                           {formatAmount(booking.totalPriceEUR, booking.totalPriceFCFA)}
                         </p>
+                        {getPaymentStatusBadge(booking.paymentStatus)}
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500 mb-0.5">Source</p>
@@ -1022,9 +1306,25 @@ const Bookings: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Actions - Delete only (Edit and Check-in are in header) */}
-                    {isAdmin && (
-                      <div className="flex items-center justify-end pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                    {/* Actions */}
+                    <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                      {(booking.status === 'checked_in' || booking.status === 'checked_out' || booking.paymentStatus === 'paid') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="p-2 border-blue-300 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          title="Générer facture"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGenerateInvoice(booking);
+                          }}
+                          isLoading={generatingInvoice === booking.id}
+                          disabled={generatingInvoice !== null}
+                        >
+                          <FileText className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {isAdmin && !isInvestor && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1037,8 +1337,8 @@ const Bookings: React.FC = () => {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </CardBody>
                 </Card>
               ))
@@ -1055,11 +1355,26 @@ const Bookings: React.FC = () => {
         property={viewingBooking ? getProperty(viewingBooking.propertyId) : undefined}
         isOpen={!!viewingBooking}
         onClose={() => setViewingBooking(null)}
-        onEdit={handleEditFromDetails}
-        onDelete={handleDeleteFromDetails}
+        onEdit={!isInvestor ? handleEditFromDetails : undefined}
+        onDelete={!isInvestor ? handleDeleteFromDetails : undefined}
         isAdmin={isAdmin}
         formatAmount={formatAmount}
       />
+
+      {/* Invoice Preview Modal */}
+      {invoicePreview && (
+        <InvoicePreviewModal
+          isOpen={!!invoicePreview}
+          onClose={() => setInvoicePreview(null)}
+          invoiceNumber={invoicePreview.invoiceNumber}
+          pdfUrl={invoicePreview.pdfUrl}
+          booking={invoicePreview.booking}
+          customer={invoicePreview.customer}
+          onDownload={handleDownloadInvoice}
+          onSendEmail={handleSendEmail}
+          onSendWhatsApp={handleSendWhatsApp}
+        />
+      )}
 
       {/* Create Modal */}
       <Modal
@@ -1078,7 +1393,13 @@ const Bookings: React.FC = () => {
       {/* Edit Modal */}
       <Modal
         isOpen={!!editingBooking}
-        onClose={() => setEditingBooking(null)}
+        onClose={() => {
+          setEditingBooking(null);
+          // Clear any URL parameters
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('edit');
+          setSearchParams(newParams, { replace: true });
+        }}
         title="Modifier la réservation"
         size="lg"
       >
@@ -1087,7 +1408,13 @@ const Bookings: React.FC = () => {
             onSubmit={handleUpdate}
             initialData={editingBooking}
             isLoading={updateBooking.isPending}
-            onCancel={() => setEditingBooking(null)}
+            onCancel={() => {
+              setEditingBooking(null);
+              // Clear any URL parameters
+              const newParams = new URLSearchParams(searchParams);
+              newParams.delete('edit');
+              setSearchParams(newParams, { replace: true });
+            }}
           />
         )}
       </Modal>

@@ -14,18 +14,13 @@ import CurrencyToggle from '../ui/CurrencyToggle';
 import ModeToggle from './ModeToggle';
 
 const Header: React.FC = () => {
-  const { isAdmin, switchToStaff } = useMode();
+  const { isAdmin, isInvestor } = useMode();
   const { currency, setCurrency } = useCurrency();
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const setMobileMenuOpen = useAppStore((state) => state.setMobileMenuOpen);
   const mobileMenuOpen = useAppStore((state) => state.mobileMenuOpen);
   const [showModeToggle, setShowModeToggle] = useState(false);
   const navigate = useNavigate();
-
-  const handleLockToStaff = () => {
-    switchToStaff();
-    navigate('/dashboard');
-  };
 
   return (
     <>
@@ -73,23 +68,29 @@ const Header: React.FC = () => {
             </button>
 
             {/* Mode Toggle Button */}
-            {isAdmin ? (
-              <button
-                onClick={handleLockToStaff}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
-              >
-                <Lock className="w-4 h-4" />
-                <span className="text-sm font-medium hidden sm:inline">Verrouiller</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowModeToggle(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-              >
-                <Unlock className="w-4 h-4" />
-                <span className="text-sm font-medium hidden sm:inline">Admin</span>
-              </button>
-            )}
+            <button
+              onClick={() => setShowModeToggle(true)}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-2 rounded-xl transition-colors",
+                isAdmin 
+                  ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                  : isInvestor
+                  ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              )}
+            >
+              {isAdmin ? (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span className="text-sm font-medium hidden sm:inline">Changer de mode</span>
+                </>
+              ) : (
+                <>
+                  <Unlock className="w-4 h-4" />
+                  <span className="text-sm font-medium hidden sm:inline">Changer de mode</span>
+                </>
+              )}
+            </button>
 
             {/* User menu */}
             <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
@@ -98,7 +99,7 @@ const Header: React.FC = () => {
               </div>
               <div className="hidden lg:block">
                 <p className="text-sm font-semibold text-gray-900">
-                  {isAdmin ? 'Administrateur' : 'Staff'}
+                  {isAdmin ? 'Administrateur' : isInvestor ? 'Investisseur' : 'Staff'}
                 </p>
                 <p className="text-xs text-gray-500">ZN Apart MS</p>
               </div>

@@ -67,6 +67,28 @@ const Customers: React.FC = () => {
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
 
+  // Calculate booking counts dynamically from actual bookings
+  const bookingCountsByCustomer = useMemo(() => {
+    if (!allBookings) return new Map<string, number>();
+    
+    const counts = new Map<string, number>();
+    allBookings.forEach((booking) => {
+      if (booking.customerId) {
+        counts.set(booking.customerId, (counts.get(booking.customerId) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [allBookings]);
+
+  // Enhance customers with actual booking counts
+  const customersWithBookingCounts = useMemo(() => {
+    if (!customers) return [];
+    return customers.map((customer) => ({
+      ...customer,
+      totalBookings: bookingCountsByCustomer.get(customer.id) || 0,
+    }));
+  }, [customers, bookingCountsByCustomer]);
+
   const {
     register,
     handleSubmit,
@@ -170,10 +192,10 @@ const getStatusBadge = (customer: Customer) => {
 
   // Filter and sort customers
   const filteredCustomers = useMemo(() => {
-    if (!customers) return [];
+    if (!customersWithBookingCounts) return [];
     
     // Filter
-    let filtered = customers.filter((customer) => {
+    let filtered = customersWithBookingCounts.filter((customer) => {
       // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
@@ -545,7 +567,7 @@ const getStatusBadge = (customer: Customer) => {
         </CardBody>
       </Card>
 
-      {/* Table */}
+      {/* Desktop Table View */}
       {!filteredCustomers || filteredCustomers.length === 0 ? (
         <EmptyState
           icon={<Users className="w-8 h-8 text-gray-400" />}
@@ -557,16 +579,105 @@ const getStatusBadge = (customer: Customer) => {
           }}
         />
       ) : (
-        <Card>
-          <Table
-            columns={columns}
-            data={filteredCustomers}
-            keyExtractor={(item) => item.id}
-            isLoading={isLoading}
-            emptyMessage="Aucun client trouvé"
-            onRowClick={(customer) => setViewingCustomerId(customer.id)}
-          />
-        </Card>
+        <>
+          <Card className="hidden md:block">
+            <Table
+              columns={columns}
+              data={filteredCustomers}
+              keyExtractor={(item) => item.id}
+              isLoading={isLoading}
+              emptyMessage="Aucun client trouvé"
+              onRowClick={(customer) => setViewingCustomerId(customer.id)}
+            />
+          </Card>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">Chargement...</div>
+            ) : filteredCustomers.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">Aucun client trouvé</div>
+            ) : (
+              filteredCustomers.map((customer) => (
+                <Card
+                  key={customer.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => setViewingCustomerId(customer.id)}
+                >
+                  <CardBody className="p-4">
+                    {/* Header: Name and Status */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 text-base mb-1">
+                          {customer.name}
+                        </h3>
+                        {customer.nationality && (
+                          <p className="text-xs text-gray-500">
+                            {customer.nationality}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {getStatusBadge(customer)}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="p-1.5"
+                          title="Modifier"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(customer);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Contact Information */}
+                    <div className="space-y-2 mb-3">
+                      {customer.email && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="truncate">{customer.email}</span>
+                        </div>
+                      )}
+                      {customer.phone && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span>{formatPhoneNumber(customer.phone)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stats and Channel */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-0.5">Réservations</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {customer.totalBookings}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 mb-0.5">Canal</p>
+                        <Badge variant="gray" size="sm">
+                          {getSourceLabel(getMostCommonSource(customer.id))}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Date Added */}
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <p className="text-xs text-gray-500">
+                        Ajouté le {formatDate(customer.createdAt)}
+                      </p>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))
+            )}
+          </div>
+        </>
       )}
 
       {/* Create/Edit Modal */}
@@ -584,7 +695,7 @@ const getStatusBadge = (customer: Customer) => {
 
       <CustomerDetailsModal
         customerId={viewingCustomerId}
-        customer={customerDetails?.customer || null}
+        customer={customerDetails?.customer || customers?.find(c => c.id === viewingCustomerId) || null}
         customerStats={customerDetails ? {
           totalBookings: customerDetails.totalBookings,
           totalRevenue: customerDetails.totalRevenue,
@@ -594,14 +705,16 @@ const getStatusBadge = (customer: Customer) => {
         isOpen={!!viewingCustomerId}
         onClose={() => setViewingCustomerId(null)}
         onEdit={() => {
-          if (customerDetails?.customer) {
-            handleOpenEdit(customerDetails.customer);
+          const customerToEdit = customerDetails?.customer || customers?.find(c => c.id === viewingCustomerId);
+          if (customerToEdit) {
+            handleOpenEdit(customerToEdit);
             setViewingCustomerId(null);
           }
         }}
         onDelete={() => {
-          if (customerDetails?.customer) {
-            setDeletingCustomer(customerDetails.customer);
+          const customerToDelete = customerDetails?.customer || customers?.find(c => c.id === viewingCustomerId);
+          if (customerToDelete) {
+            setDeletingCustomer(customerToDelete);
             setViewingCustomerId(null);
           }
         }}

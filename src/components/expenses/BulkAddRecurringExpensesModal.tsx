@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Calendar, Check } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Calendar, Check, X } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import DatePicker from '../ui/DatePicker';
 import Checkbox from '../ui/Checkbox';
+import Select from '../ui/Select';
 import { useRecurringExpenses } from '../../hooks/useRecurringExpenses';
 import { useBulkCreateExpenses } from '../../hooks/useExpenses';
 import { useProperties } from '../../hooks/useProperties';
@@ -11,6 +12,8 @@ import { useCurrency } from '../../store/useAppStore';
 import { formatForInput, getFirstDayOfMonth, getLastDayOfMonth } from '../../utils/dates';
 import { EXPENSE_CATEGORIES } from '../../types';
 import type { ExpenseFormData } from '../../types';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface BulkAddRecurringExpensesModalProps {
   isOpen: boolean;
@@ -26,11 +29,48 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
   const bulkCreateMutation = useBulkCreateExpenses();
   const { formatAmount } = useCurrency();
 
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
+
+  // Generate year options (current year ± 2 years)
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear - 2; i <= currentYear + 2; i++) {
+      years.push({ value: i.toString(), label: i.toString() });
+    }
+    return years;
+  }, []);
+
+  // Generate month options
+  const monthOptions = useMemo(() => {
+    const months = [];
+    for (let i = 1; i <= 12; i++) {
+      const date = new Date(2000, i - 1, 1);
+      months.push({
+        value: i.toString(),
+        label: format(date, 'MMMM', { locale: fr }),
+      });
+    }
+    return months;
+  }, []);
+
+  // Add month to selection
+  const handleAddMonth = () => {
+    const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    setSelectedMonths((prev) => new Set([...prev, monthKey]));
+  };
+
+  // Remove month from selection
+  const handleRemoveMonth = (monthKey: string) => {
+    setSelectedMonths((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(monthKey);
+      return newSet;
+    });
+  };
 
   const getCategoryLabel = (category: string) => {
     return EXPENSE_CATEGORIES.find((c) => c.value === category)?.label || category;
@@ -61,17 +101,19 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
   };
 
   const handleSubmit = () => {
-    if (!recurringExpenses || selectedExpenses.size === 0 || !selectedMonth) return;
+    if (!recurringExpenses || selectedExpenses.size === 0 || selectedMonths.size === 0) return;
 
-    // Parse month string (YYYY-MM) and get first day
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const expenseDate = new Date(year, month - 1, 1);
+    // Create expenses for each selected month
+    const expensesToCreate: ExpenseFormData[] = [];
+    
+    Array.from(selectedMonths).forEach((monthKey) => {
+      const [year, month] = monthKey.split('-').map(Number);
+      const expenseDate = new Date(year, month - 1, 1);
 
-    const expensesToCreate: ExpenseFormData[] = Array.from(selectedExpenses)
-      .map((id) => {
+      Array.from(selectedExpenses).forEach((id) => {
         const template = recurringExpenses.find((e) => e.id === id);
-        if (!template) return null;
-        return {
+        if (!template) return;
+        expensesToCreate.push({
           propertyId: template.propertyId,
           category: template.category,
           vendor: template.vendor,
@@ -79,13 +121,14 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
           amountEUR: template.amountEUR,
           amountFCFA: template.amountFCFA,
           date: formatForInput(expenseDate),
-        };
-      })
-      .filter((e): e is ExpenseFormData => e !== null);
+        });
+      });
+    });
 
     bulkCreateMutation.mutate(expensesToCreate, {
       onSuccess: () => {
         setSelectedExpenses(new Set());
+        setSelectedMonths(new Set());
         onClose();
       },
     });
@@ -94,7 +137,7 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
   const footerContent = (
     <div className="flex justify-between items-center">
       <div className="text-sm text-gray-600">
-        {selectedExpenses.size} dépense{selectedExpenses.size > 1 ? 's' : ''} sélectionnée{selectedExpenses.size > 1 ? 's' : ''}
+        {selectedExpenses.size} dépense{selectedExpenses.size > 1 ? 's' : ''} × {selectedMonths.size} mois = {selectedExpenses.size * selectedMonths.size} dépense{selectedExpenses.size * selectedMonths.size > 1 ? 's' : ''} à créer
       </div>
       <div className="flex gap-3">
         <Button variant="secondary" onClick={onClose}>
@@ -103,7 +146,7 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
         <Button
           onClick={handleSubmit}
           isLoading={bulkCreateMutation.isPending}
-          disabled={selectedExpenses.size === 0 || !selectedMonth}
+          disabled={selectedExpenses.size === 0 || selectedMonths.size === 0}
         >
           Ajouter les dépenses
         </Button>
@@ -123,15 +166,68 @@ const BulkAddRecurringExpensesModal: React.FC<BulkAddRecurringExpensesModalProps
         {/* Month selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Mois <span className="text-danger-500">*</span>
+            Sélectionner les mois <span className="text-danger-500">*</span>
           </label>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pl-10 pr-3 py-2 text-sm"
-            required
-          />
+          
+          {/* Year and Month dropdowns */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <Select
+              label="Année"
+              options={yearOptions}
+              value={selectedYear.toString()}
+              onChange={(value) => setSelectedYear(parseInt(value))}
+            />
+            <Select
+              label="Mois"
+              options={monthOptions}
+              value={selectedMonth.toString()}
+              onChange={(value) => setSelectedMonth(parseInt(value))}
+            />
+          </div>
+
+          {/* Add month button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddMonth}
+            className="w-full mb-3"
+            leftIcon={<Calendar className="w-4 h-4" />}
+          >
+            Ajouter ce mois
+          </Button>
+
+          {/* Selected months list */}
+          {selectedMonths.size > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 mb-2">Mois sélectionnés:</p>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(selectedMonths)
+                  .sort()
+                  .map((monthKey) => {
+                    const [year, month] = monthKey.split('-').map(Number);
+                    const date = new Date(year, month - 1, 1);
+                    return (
+                      <div
+                        key={monthKey}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 border border-primary-200 rounded-lg text-sm"
+                      >
+                        <span className="text-primary-700 font-medium">
+                          {format(date, 'MMMM yyyy', { locale: fr })}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMonth(monthKey)}
+                          className="text-primary-500 hover:text-primary-700"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Recurring expenses list */}

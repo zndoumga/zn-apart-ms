@@ -1,6 +1,6 @@
 // Core types for the Airbnb Property Management System
 
-export type UserMode = 'staff' | 'admin';
+export type UserMode = 'staff' | 'admin' | 'investor';
 export type Currency = 'EUR' | 'FCFA';
 
 // Re-export ToastData from store
@@ -82,6 +82,7 @@ export interface BookingComment {
 
 export interface Booking {
   id: string;
+  bookingNumber?: string; // Format: XXXX-YY (e.g., 0001-26)
   propertyId: string;
   customerId?: string;
   guestName: string;
@@ -100,6 +101,7 @@ export interface Booking {
   source: BookingSource;
   notes?: string;
   checkInNotes?: string;
+  checkedInAt?: Date; // Date and time when check-in was completed
   paymentStatus: PaymentStatus;
   isDeleted?: boolean;
   createdAt: Date;
@@ -429,6 +431,8 @@ export interface Settings {
   lowBalanceThreshold: number;
   defaultCurrency: Currency;
   adminPasswordHash: string;
+  investorPasswordHash: string;
+  staffPasswordHash: string;
   updatedAt: Date;
 }
 
@@ -479,6 +483,12 @@ export const BOOKING_FORM_STATUSES: { value: BookingStatus; label: string }[] = 
   { value: 'inquiry', label: 'Demande' },
   { value: 'confirmed', label: 'Confirmée' },
   { value: 'cancelled', label: 'Annulée' },
+];
+
+export const PAYMENT_STATUSES: { value: PaymentStatus; label: string }[] = [
+  { value: 'pending', label: 'En attente' },
+  { value: 'partial', label: 'Partiel' },
+  { value: 'paid', label: 'Payé' },
 ];
 
 export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [

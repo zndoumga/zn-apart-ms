@@ -134,6 +134,9 @@ const Finances: React.FC = () => {
 
   // Period selector for charts
   const [chartPeriod, setChartPeriod] = useState<string>('last12months');
+  
+  // Selected expense categories for filtering
+  const [selectedExpenseCategories, setSelectedExpenseCategories] = useState<Set<string>>(new Set());
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -426,8 +429,39 @@ const Finances: React.FC = () => {
       currentMonth = startOfMonth(addMonths(currentMonth, 1));
     }
     
-    return { months, channels: Array.from(allChannels) };
+    // Sort channels in reverse order so the most common channel (airbnb) is last
+    // This ensures rounded corners appear on the top bar when airbnb is the only/top channel
+    const channelOrder: Record<string, number> = { other: 0, direct: 1, booking: 2, airbnb: 3 };
+    const sortedChannels = Array.from(allChannels).sort((a, b) => {
+      const orderA = channelOrder[a] ?? 999;
+      const orderB = channelOrder[b] ?? 999;
+      return orderA - orderB;
+    });
+    
+    return { months, channels: sortedChannels };
   }, [bookings, chartDateRange]);
+
+  // Get all unique categories for the date range
+  const allExpenseCategories = useMemo(() => {
+    if (!expenses) return new Set<string>();
+    const { startDate, endDate } = chartDateRange;
+    const categories = new Set<string>();
+    expenses.forEach((e) => {
+      const expenseDate = new Date(e.date);
+      if (expenseDate >= startDate && expenseDate <= endDate) {
+        categories.add(e.category);
+      }
+    });
+    return categories;
+  }, [expenses, chartDateRange]);
+
+  // Initialize selected categories with all categories on first load
+  useEffect(() => {
+    if (selectedExpenseCategories.size === 0 && allExpenseCategories.size > 0) {
+      setSelectedExpenseCategories(new Set(allExpenseCategories));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allExpenseCategories.size]);
 
   // Expense breakdown by month (by category)
   const expenseBreakdownByMonth = useMemo(() => {
@@ -439,14 +473,15 @@ const Finances: React.FC = () => {
     let currentMonth = startOfMonth(startDate);
     const endMonth = endOfMonth(endDate);
     
-    // Get all unique categories
-    const allCategories = new Set<string>();
-    expenses.forEach((e) => {
-      const expenseDate = new Date(e.date);
-      if (expenseDate >= startDate && expenseDate <= endDate) {
-        allCategories.add(e.category);
-      }
-    });
+    // Filter categories based on selection - if none selected, show all
+    const categoriesToShow = selectedExpenseCategories.size === 0 
+      ? Array.from(allExpenseCategories)
+      : Array.from(allExpenseCategories).filter(cat => selectedExpenseCategories.has(cat));
+    
+    // If no categories to show, return empty
+    if (categoriesToShow.length === 0) {
+      return { months: [], categories: Array.from(allExpenseCategories) };
+    }
     
     while (currentMonth <= endMonth) {
       const monthStart = startOfMonth(currentMonth);
@@ -456,18 +491,23 @@ const Finances: React.FC = () => {
         month: format(currentMonth, 'MMM yyyy', { locale: fr }),
       };
       
-      // Initialize all categories to 0 for both EUR and FCFA
-      allCategories.forEach((category) => {
+      // Initialize ALL categories to 0 for both EUR and FCFA (so all appear in legend)
+      allExpenseCategories.forEach((category) => {
         monthData[category] = 0;
         monthData[`${category}_FCFA`] = 0;
       });
       
       // Sum expenses by category for this month
+      // For selected categories, sum the actual values
+      // For unselected categories, set to 0 (so they appear in legend but not in chart)
       expenses.forEach((expense) => {
         const expenseDate = new Date(expense.date);
         if (expenseDate >= monthStart && expenseDate <= monthEnd) {
-          monthData[expense.category] = (monthData[expense.category] as number) + expense.amountEUR;
-          monthData[`${expense.category}_FCFA`] = (monthData[`${expense.category}_FCFA`] as number) + expense.amountFCFA;
+          if (categoriesToShow.includes(expense.category)) {
+            monthData[expense.category] = (monthData[expense.category] as number) + expense.amountEUR;
+            monthData[`${expense.category}_FCFA`] = (monthData[`${expense.category}_FCFA`] as number) + expense.amountFCFA;
+          }
+          // For unselected categories, ensure they're set to 0 (already initialized above)
         }
       });
       
@@ -475,8 +515,8 @@ const Finances: React.FC = () => {
       currentMonth = startOfMonth(addMonths(currentMonth, 1));
     }
     
-    return { months, categories: Array.from(allCategories) };
-  }, [expenses, chartDateRange]);
+    return { months, categories: Array.from(allExpenseCategories) };
+  }, [expenses, chartDateRange, selectedExpenseCategories, allExpenseCategories]);
 
 
   const isLoading = loadingBookings || loadingExpenses;
@@ -585,7 +625,7 @@ const Finances: React.FC = () => {
       {/* Section 1: KPI Cards */}
       <div className="space-y-4">
         {/* KPI Cards - Top Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr">
           {/* Total Bookings */}
           <StatsCard
             title="Total Bookings"
@@ -620,7 +660,7 @@ const Finances: React.FC = () => {
         </div>
 
         {/* KPI Cards - Bottom Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr">
           {/* Total Income */}
           <StatsCard
             title="Total Income"
@@ -754,31 +794,36 @@ const Finances: React.FC = () => {
                       iconType="square"
                       iconSize={12}
                     />
-                    {channelDataByMonth.channels.map((channel, index) => (
-                      <Bar
-                        key={channel}
-                        dataKey={channel}
-                        stackId="channels"
-                        fill={getChannelColor(channel)}
-                        name={getChannelLabel(channel)}
-                        radius={index === channelDataByMonth.channels.length - 1 ? [8, 8, 0, 0] : [0, 0, 0, 0]}
-                      >
-                        <LabelList
-                          dataKey={channel}
-                          position="center"
-                          formatter={(value: any) => {
-                            const percent = Number(value);
-                            return percent > 0 ? `${Math.ceil(percent)}%` : '';
-                          }}
-                          style={{ 
-                            fill: '#ffffff', 
-                            fontSize: 10, 
-                            fontWeight: 600,
-                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
-                          }}
-                        />
-                      </Bar>
-                    ))}
+                    {channelDataByMonth.channels.map((channel, index) => {
+                        // For stacked bars, the last channel in the array is always rendered on top
+                        // So we apply rounded corners to the last channel to ensure all months have rounded tops
+                        const isLastChannel = index === channelDataByMonth.channels.length - 1;
+                        return (
+                          <Bar
+                            key={channel}
+                            dataKey={channel}
+                            stackId="channels"
+                            fill={getChannelColor(channel)}
+                            name={getChannelLabel(channel)}
+                            radius={isLastChannel ? [8, 8, 0, 0] : [0, 0, 0, 0]}
+                          >
+                            <LabelList
+                              dataKey={channel}
+                              position="center"
+                              formatter={(value: any) => {
+                                const percent = Number(value);
+                                return percent > 0 ? `${Math.ceil(percent)}%` : '';
+                              }}
+                              style={{ 
+                                fill: '#ffffff', 
+                                fontSize: 10, 
+                                fontWeight: 600,
+                                textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                              }}
+                            />
+                          </Bar>
+                        );
+                      })}
                   </BarChart>
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500">
@@ -1103,7 +1148,7 @@ const Finances: React.FC = () => {
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                {expenseBreakdownByMonth.categories && expenseBreakdownByMonth.categories.length > 0 ? (
+                {expenseBreakdownByMonth && expenseBreakdownByMonth.categories && expenseBreakdownByMonth.categories.length > 0 ? (
                   <BarChart data={expenseBreakdownByMonth.months} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
                     <XAxis 
@@ -1132,17 +1177,84 @@ const Finances: React.FC = () => {
                       wrapperStyle={{ paddingTop: '20px' }}
                       iconType="square"
                       iconSize={12}
+                      onClick={(e: any) => {
+                        try {
+                          const category = e.dataKey || e.value;
+                          if (!category) return;
+                          // Handle both EUR and FCFA dataKeys
+                          const actualCategory = category.replace('_FCFA', '');
+                          if (expenseBreakdownByMonth.categories && expenseBreakdownByMonth.categories.includes(actualCategory)) {
+                            const newSet = new Set(selectedExpenseCategories);
+                            if (newSet.has(actualCategory)) {
+                              newSet.delete(actualCategory);
+                            } else {
+                              newSet.add(actualCategory);
+                            }
+                            setSelectedExpenseCategories(newSet);
+                          }
+                        } catch (error) {
+                          console.error('Error handling legend click:', error);
+                        }
+                      }}
+                      formatter={(value: string, entry: any) => {
+                        // Extract category from dataKey (handles both EUR and FCFA)
+                        const dataKey = entry.dataKey || entry.payload?.dataKey || '';
+                        const category = dataKey.replace('_FCFA', '') || value;
+                        const isSelected = selectedExpenseCategories.size === 0 || selectedExpenseCategories.has(category);
+                        return (
+                          <span 
+                            style={{ 
+                              cursor: 'pointer',
+                              opacity: isSelected ? 1 : 0.4,
+                              userSelect: 'none'
+                            }}
+                          >
+                            {getCategoryLabel(category)}
+                          </span>
+                        );
+                      }}
                     />
-                    {expenseBreakdownByMonth.categories.map((category: string, index: number) => (
-                      <Bar
-                        key={category}
-                        dataKey={currency === 'EUR' ? category : `${category}_FCFA`}
-                        stackId="expenses"
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                        name={getCategoryLabel(category)}
-                        radius={index === expenseBreakdownByMonth.categories.length - 1 ? [8, 8, 0, 0] : [0, 0, 0, 0]}
-                      />
-                    ))}
+                    {expenseBreakdownByMonth.categories && expenseBreakdownByMonth.categories.length > 0 && expenseBreakdownByMonth.categories.map((category: string, index: number) => {
+                        const isSelected = selectedExpenseCategories.size === 0 || selectedExpenseCategories.has(category);
+                        const filteredCategories = expenseBreakdownByMonth.categories.filter((cat: string) => 
+                          selectedExpenseCategories.size === 0 || selectedExpenseCategories.has(cat)
+                        );
+                        const isLastSelected = isSelected && category === filteredCategories[filteredCategories.length - 1];
+                        return (
+                          <Bar
+                            key={category}
+                            dataKey={currency === 'EUR' ? category : `${category}_FCFA`}
+                            stackId="expenses"
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            name={getCategoryLabel(category)}
+                            radius={isLastSelected ? [8, 8, 0, 0] : [0, 0, 0, 0]}
+                            style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0 }}
+                          >
+                            {isLastSelected && filteredCategories.length > 0 && (
+                              <LabelList
+                                position="top"
+                                offset={10}
+                                formatter={(value: any, entry: any) => {
+                                  // Calculate total for the entire stack
+                                  const monthData = entry?.payload;
+                                  if (!monthData) return '';
+                                  try {
+                                    const total = filteredCategories.reduce((sum: number, cat: string) => {
+                                      const key = currency === 'EUR' ? cat : `${cat}_FCFA`;
+                                      return sum + (Number(monthData[key]) || 0);
+                                    }, 0);
+                                    return total > 0 ? formatLabelValue(total) : '';
+                                  } catch (error) {
+                                    console.error('Error formatting label:', error);
+                                    return '';
+                                  }
+                                }}
+                                style={{ fill: '#6b7280', fontSize: 10, fontWeight: 600 }}
+                              />
+                            )}
+                          </Bar>
+                        );
+                      })}
                   </BarChart>
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500">
@@ -1172,7 +1284,7 @@ function getCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
     cleaning: 'Nettoyage',
     maintenance: 'Maintenance',
-    utilities: 'Services',
+    utilities: 'Utilities',
     supplies: 'Fournitures',
     wages: 'Salaires',
     taxes: 'Taxes',

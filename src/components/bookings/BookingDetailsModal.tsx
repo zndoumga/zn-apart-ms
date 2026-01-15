@@ -11,25 +11,35 @@ import {
   Trash2,
   Send,
   MessageCircle,
+  FileText,
+  Clock,
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CheckInSection from './CheckInSection';
-import type { Booking, BookingStatus, Property, BookingComment, Customer } from '../../types';
+import Select from '../ui/Select';
+import InvoicePreviewModal from '../invoices/InvoicePreviewModal';
+import type { Booking, BookingStatus, Property, BookingComment, Customer, PaymentStatus } from '../../types';
 import { formatDate } from '../../utils/dates';
 import { useBookingComments, useAddBookingComment, useDeleteBookingComment } from '../../hooks/useBookingComments';
-import { getCustomer } from '../../hooks/useCheckIn';
+import { useUpdateBooking } from '../../hooks/useBookings';
+import { useUndoCheckIn } from '../../hooks/useCheckIn';
+import { getCustomer } from '../../services/customerService';
+import { generateInvoicePDF, findExistingInvoice } from '../../services/invoiceService';
+import { useProperties } from '../../hooks/useProperties';
+import { useToast } from '../../store/useAppStore';
 import { differenceInDays, format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { PAYMENT_STATUSES } from '../../types';
 
 interface BookingDetailsModalProps {
   booking: Booking | null;
   property?: Property;
   isOpen: boolean;
   onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   isAdmin: boolean;
   formatAmount: (eur: number, fcfa: number) => string;
 }
@@ -46,10 +56,29 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
 }) => {
   const [newComment, setNewComment] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(booking?.paymentStatus || 'pending');
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState<{
+    invoiceNumber: string;
+    pdfUrl: string;
+    booking: Booking;
+    customer?: Customer;
+  } | null>(null);
   
   const { data: comments, isLoading: commentsLoading } = useBookingComments(booking?.id);
   const addComment = useAddBookingComment(booking?.id || '');
   const deleteComment = useDeleteBookingComment(booking?.id || '');
+  const updateBooking = useUpdateBooking();
+  const undoCheckIn = useUndoCheckIn(booking?.id || '');
+  const { data: properties } = useProperties();
+  const { addToast } = useToast();
+
+  // Update payment status when booking changes
+  useEffect(() => {
+    if (booking?.paymentStatus) {
+      setPaymentStatus(booking.paymentStatus);
+    }
+  }, [booking?.paymentStatus]);
 
   // Fetch customer data if booking has customerId
   useEffect(() => {
@@ -137,12 +166,156 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
     }
   };
 
+  const handleUndoCheckIn = async () => {
+    if (!booking) return;
+    
+    if (window.confirm('Êtes-vous sûr de vouloir annuler le check-in ? Le statut de la réservation sera réinitialisé à "Confirmé".')) {
+      try {
+        await undoCheckIn.mutateAsync();
+        // The query invalidation in the hook will automatically refresh the booking data
+        // The parent component should refetch and update the booking prop
+      } catch (error) {
+        // Error is already handled by the hook
+        console.error('Error undoing check-in:', error);
+      }
+    }
+  };
+
   const canShowCheckIn = booking.status === 'confirmed' || booking.status === 'checked_in' || booking.status === 'checked_out';
+  const canGenerateInvoice = 
+    booking.status === 'checked_in' || 
+    booking.status === 'checked_out' || 
+    booking.paymentStatus === 'paid';
+
+  const handleGenerateInvoice = async () => {
+    if (!properties || !booking) return;
+    
+    const property = properties.find(p => p.id === booking.propertyId);
+    if (!property) {
+      addToast({
+        type: 'error',
+        title: 'Erreur',
+        message: 'Propriété introuvable pour cette réservation.',
+      });
+      return;
+    }
+
+    setGeneratingInvoice(true);
+    
+    try {
+      // Always check for existing invoice first - use it if found
+      const existingInvoice = await findExistingInvoice(booking);
+      
+      if (existingInvoice) {
+        // Use existing invoice - don't create a new one
+        setInvoicePreview({
+          invoiceNumber: existingInvoice.invoiceNumber,
+          pdfUrl: existingInvoice.pdfUrl,
+          booking,
+          customer: customer || undefined,
+        });
+        
+        addToast({
+          type: 'success',
+          title: 'Facture chargée',
+          message: `Facture ${existingInvoice.invoiceNumber} chargée.`,
+        });
+      } else {
+        // Only generate new invoice if none exists
+        const { invoiceNumber, pdfUrl } = await generateInvoicePDF(booking, property, customer || undefined);
+        
+        setInvoicePreview({
+          invoiceNumber,
+          pdfUrl,
+          booking,
+          customer: customer || undefined,
+        });
+
+        addToast({
+          type: 'success',
+          title: 'Facture générée',
+          message: `La facture ${invoiceNumber} a été générée avec succès.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      addToast({
+        type: 'error',
+        title: 'Erreur',
+        message: 'Impossible de générer la facture. Veuillez réessayer.',
+      });
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
+
+  const handleDownloadInvoice = () => {
+    if (!invoicePreview) return;
+    
+    const link = document.createElement('a');
+    link.href = invoicePreview.pdfUrl;
+    link.download = `${invoicePreview.invoiceNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    addToast({
+      type: 'success',
+      title: 'Téléchargement',
+      message: 'La facture a été téléchargée.',
+    });
+  };
+
+  const handleSendEmail = async (email: string) => {
+    if (!invoicePreview) return;
+    
+    const subject = encodeURIComponent(`Facture ${invoicePreview.invoiceNumber} - ZN Enterprises`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver ci-joint la facture ${invoicePreview.invoiceNumber} pour votre réservation.\n\nCordialement,\nZN Enterprises`
+    );
+    
+    const mailtoLink = `mailto:${email}?subject=${subject}&body=${body}`;
+    window.location.href = mailtoLink;
+    
+    addToast({
+      type: 'success',
+      title: 'Email',
+      message: 'L\'application email s\'ouvre avec la facture.',
+    });
+  };
+
+  const handleSendWhatsApp = (phone: string) => {
+    if (!invoicePreview) return;
+    
+    const cleanPhone = phone.replace(/[\s\+\-\(\)]/g, '');
+    const message = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver votre facture ${invoicePreview.invoiceNumber} :\n${invoicePreview.pdfUrl}\n\nCordialement,\nZN Enterprises`
+    );
+    
+    const whatsappLink = `https://wa.me/${cleanPhone}?text=${message}`;
+    window.open(whatsappLink, '_blank');
+    
+    addToast({
+      type: 'success',
+      title: 'WhatsApp',
+      message: 'WhatsApp s\'ouvre avec le message.',
+    });
+  };
 
   const footerContent = (
     <div className="flex justify-between items-center">
-      <div>
-        {isAdmin && (
+      <div className="flex gap-2">
+        {canGenerateInvoice && (
+          <Button
+            variant="primary"
+            onClick={handleGenerateInvoice}
+            isLoading={generatingInvoice}
+            leftIcon={<FileText className="w-4 h-4" />}
+          >
+            Facture
+          </Button>
+        )}
+        {isAdmin && onDelete && (
           <Button
             variant="ghost"
             onClick={onDelete}
@@ -157,15 +330,18 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         <Button variant="secondary" onClick={onClose}>
           Fermer
         </Button>
-        <Button onClick={onEdit}>
-          <Pencil className="w-4 h-4 mr-2" />
-          Modifier
-        </Button>
+        {onEdit && (
+          <Button onClick={onEdit}>
+            <Pencil className="w-4 h-4 mr-2" />
+            Modifier
+          </Button>
+        )}
       </div>
     </div>
   );
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -178,7 +354,23 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         <div className="flex items-center justify-between pb-4 border-b">
           <div className="flex items-center gap-3">
             {getStatusBadge(booking.status)}
-            {getPaymentBadge(booking.paymentStatus)}
+            <div className="flex items-center gap-2">
+              <Select
+                options={PAYMENT_STATUSES}
+                value={paymentStatus}
+                onChange={(value) => {
+                  const newStatus = value as PaymentStatus;
+                  setPaymentStatus(newStatus);
+                  if (booking) {
+                    updateBooking.mutate({
+                      id: booking.id,
+                      data: { paymentStatus: newStatus },
+                    });
+                  }
+                }}
+                className="min-w-[120px]"
+              />
+            </div>
           </div>
           <span className="text-sm text-gray-500">
             Créé le {format(new Date(booking.createdAt), 'dd/MM/yyyy')}
@@ -238,6 +430,12 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
                   {formatDate(booking.checkIn)} → {formatDate(booking.checkOut)}
                 </p>
                 <p className="text-sm text-gray-500">{stayDuration} nuit(s)</p>
+                {booking.checkedInAt && (
+                  <p className="text-xs text-primary-600 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Check-in: {format(new Date(booking.checkedInAt), 'dd MMM yyyy à HH:mm', { locale: fr })}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -288,11 +486,29 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
 
         {/* Check-in Section */}
         {canShowCheckIn && (
-          <CheckInSection
-            booking={booking}
-            customer={customer}
-            onCheckInComplete={handleCheckInComplete}
-          />
+          <div>
+            <CheckInSection
+              booking={booking}
+              customer={customer}
+              onCheckInComplete={handleCheckInComplete}
+            />
+            {/* Undo Check-in Button - Only show if checked in and user is admin */}
+            {isAdmin && booking.status === 'checked_in' && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  onClick={handleUndoCheckIn}
+                  isLoading={undoCheckIn.isPending}
+                  className="w-full text-warning-600 border-warning-300 hover:bg-warning-50 hover:border-warning-400"
+                >
+                  Annuler le check-in
+                </Button>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Réinitialise le statut de la réservation à "Confirmé"
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Notes */}
@@ -386,6 +602,22 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         </div>
       </div>
     </Modal>
+
+    {/* Invoice Preview Modal */}
+    {invoicePreview && (
+      <InvoicePreviewModal
+        isOpen={!!invoicePreview}
+        onClose={() => setInvoicePreview(null)}
+        invoiceNumber={invoicePreview.invoiceNumber}
+        pdfUrl={invoicePreview.pdfUrl}
+        booking={invoicePreview.booking}
+        customer={invoicePreview.customer}
+        onDownload={handleDownloadInvoice}
+        onSendEmail={handleSendEmail}
+        onSendWhatsApp={handleSendWhatsApp}
+      />
+    )}
+    </>
   );
 };
 

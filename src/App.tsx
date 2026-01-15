@@ -41,6 +41,17 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// Investor or Admin route guard (for read-only access)
+const InvestorOrAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAdmin, isInvestor } = useMode();
+  
+  if (!isAdmin && !isInvestor) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -50,7 +61,7 @@ function App() {
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
-            {/* Common routes (Staff + Admin) */}
+            {/* Common routes (Staff + Admin + Investor) */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/expenses" element={<Expenses />} />
@@ -58,15 +69,25 @@ function App() {
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/requests" element={<Requests />} />
             
-            {/* Admin-only routes */}
+            {/* Investor or Admin routes (read-only for investor) */}
             <Route
               path="/properties"
               element={
-                <AdminRoute>
+                <InvestorOrAdminRoute>
                   <Properties />
-                </AdminRoute>
+                </InvestorOrAdminRoute>
               }
             />
+            <Route
+              path="/finances"
+              element={
+                <InvestorOrAdminRoute>
+                  <Finances />
+                </InvestorOrAdminRoute>
+              }
+            />
+            
+            {/* Admin-only routes */}
             <Route
               path="/customers"
               element={
@@ -80,14 +101,6 @@ function App() {
               element={
                 <AdminRoute>
                   <Maintenance />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/finances"
-              element={
-                <AdminRoute>
-                  <Finances />
                 </AdminRoute>
               }
             />

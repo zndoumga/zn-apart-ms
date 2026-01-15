@@ -3,11 +3,11 @@ import {
   DollarSign,
   Calendar,
   CheckSquare,
-  AlertCircle,
   Percent,
   PiggyBank,
   TrendingUp,
   Plus,
+  MessageSquare,
 } from 'lucide-react';
 import { useMode, useCurrency } from '../store/useAppStore';
 import StatsCard from '../components/dashboard/StatsCard';
@@ -36,7 +36,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const Dashboard: React.FC = () => {
-  const { isAdmin } = useMode();
+  const { isAdmin, isInvestor } = useMode();
   const { formatAmount } = useCurrency();
 
   // Month state - shared between calendar and KPIs
@@ -53,7 +53,7 @@ const Dashboard: React.FC = () => {
   const { data: expenses } = useExpenses();
   const { data: properties } = useProperties(true);
   const { data: taskCounts } = useTaskCounts();
-  const { data: unresolvedRequests } = useUnresolvedRequestCount();
+  const { data: unresolvedRequestCount } = useUnresolvedRequestCount();
   const { data: balance } = useCurrentBalance();
   const { data: isLowBalance } = useIsBalanceLow();
 
@@ -164,7 +164,7 @@ const Dashboard: React.FC = () => {
               : 'Bienvenue ! Voici votre résumé du jour.'}
           </p>
         </div>
-        <div className="w-64">
+        <div className="w-64 hidden md:block">
           <Select
             options={propertyOptions}
             value={selectedProperty}
@@ -175,7 +175,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Quick action buttons for staff */}
-      {!isAdmin && (
+      {!isAdmin && !isInvestor && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Button
             onClick={() => window.location.href = '/bookings?new=true'}
@@ -201,95 +201,207 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Stats cards - Combined grid for better mobile layout */}
-      <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 md:gap-4`}>
-        {/* 1. Income (Revenue) */}
-        <StatsCard
-          title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
-          value={formatAmount(selectedMonthRevenue.EUR, selectedMonthRevenue.FCFA)}
-          icon={<TrendingUp className="w-4 h-4" />}
-          change={isAdmin ? revenueChange : undefined}
-          changeLabel={isAdmin ? "vs mois dernier" : undefined}
-          variant="success"
-        />
-
-        {/* 2. Expenses */}
-        <StatsCard
-          title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
-          value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
-          icon={<DollarSign className="w-4 h-4" />}
-          variant="default"
-        />
-
-        {/* 3. Profit - Admin only */}
-        {isAdmin && (
-          <StatsCard
-            title="Bénéfice net"
-            value={formatAmount(
-              selectedMonthRevenue.EUR - selectedMonthExpenses.EUR,
-              selectedMonthRevenue.FCFA - selectedMonthExpenses.FCFA
-            )}
-            icon={<TrendingUp className="w-4 h-4" />}
-            variant={selectedMonthRevenue.EUR - selectedMonthExpenses.EUR > 0 ? 'success' : 'danger'}
+      {/* Apartment selector for mobile - right above KPI cards */}
+      <div className="md:hidden flex justify-end">
+        <div className="w-40">
+          <Select
+            options={propertyOptions}
+            value={selectedProperty}
+            onChange={setSelectedProperty}
+            placeholder="Sélectionner un appartement"
           />
+        </div>
+      </div>
+
+      {/* Stats cards - Mobile: 2 columns, Desktop: varies by mode */}
+      <div className="space-y-3 md:space-y-4">
+        {isInvestor ? (
+          /* Investor mode: 6 KPI cards - Revenue, Expenses, Net Profit, Nights Booked, Occupancy Rate, Average Nightly Rate */
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            {/* 1. Revenue */}
+            <StatsCard
+              title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+              value={formatAmount(selectedMonthRevenue.EUR, selectedMonthRevenue.FCFA)}
+              icon={<TrendingUp className="w-4 h-4" />}
+              variant="success"
+            />
+
+            {/* 2. Expenses */}
+            <StatsCard
+              title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+              value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
+              icon={<DollarSign className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 3. Net Profit */}
+            <StatsCard
+              title="Bénéfice net"
+              value={formatAmount(
+                selectedMonthRevenue.EUR - selectedMonthExpenses.EUR,
+                selectedMonthRevenue.FCFA - selectedMonthExpenses.FCFA
+              )}
+              icon={<TrendingUp className="w-4 h-4" />}
+              variant={selectedMonthRevenue.EUR - selectedMonthExpenses.EUR > 0 ? 'success' : 'danger'}
+            />
+
+            {/* 4. Nights Booked */}
+            <StatsCard
+              title="Nuits réservées"
+              value={nightsBooked}
+              icon={<Calendar className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 5. Occupancy Rate */}
+            <StatsCard
+              title="Taux d'occupation"
+              value={`${monthOccupancy.rate.toFixed(0)}%`}
+              subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
+              icon={<Percent className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 6. Average Nightly Rate */}
+            <StatsCard
+              title="Prix moyen/nuit"
+              value={formatAmount(averageNightPrice.EUR, averageNightPrice.FCFA)}
+              icon={<DollarSign className="w-4 h-4" />}
+              variant="default"
+            />
+          </div>
+        ) : isAdmin ? (
+          /* Admin mode: 8 KPI cards - 4 per row on desktop */
+          <>
+            {/* First row - 4 cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              {/* 1. Income (Revenue) */}
+              <StatsCard
+                title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+                value={formatAmount(selectedMonthRevenue.EUR, selectedMonthRevenue.FCFA)}
+                icon={<TrendingUp className="w-4 h-4" />}
+                change={revenueChange}
+                changeLabel="vs mois dernier"
+                variant="success"
+              />
+
+              {/* 2. Expenses */}
+              <StatsCard
+                title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+                value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
+                icon={<DollarSign className="w-4 h-4" />}
+                variant="default"
+              />
+
+              {/* 3. Profit */}
+              <StatsCard
+                title="Bénéfice net"
+                value={formatAmount(
+                  selectedMonthRevenue.EUR - selectedMonthExpenses.EUR,
+                  selectedMonthRevenue.FCFA - selectedMonthExpenses.FCFA
+                )}
+                icon={<TrendingUp className="w-4 h-4" />}
+                variant={selectedMonthRevenue.EUR - selectedMonthExpenses.EUR > 0 ? 'success' : 'danger'}
+              />
+
+              {/* 4. Average night price */}
+              <StatsCard
+                title="Prix moyen/nuit"
+                value={formatAmount(averageNightPrice.EUR, averageNightPrice.FCFA)}
+                icon={<DollarSign className="w-4 h-4" />}
+                variant="default"
+              />
+            </div>
+
+            {/* Second row - 4 cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              {/* 5. Nights booked */}
+              <StatsCard
+                title="Nuits réservées"
+                value={nightsBooked}
+                icon={<Calendar className="w-4 h-4" />}
+                variant="default"
+              />
+
+              {/* 6. Occupancy rate */}
+              <StatsCard
+                title="Taux d'occupation"
+                value={`${monthOccupancy.rate.toFixed(0)}%`}
+                subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
+                icon={<Percent className="w-4 h-4" />}
+                variant="default"
+              />
+
+              {/* 7. Solde Mobile Money */}
+              <StatsCard
+                title="Solde Mobile Money"
+                value={formatAmount(balance?.balanceEUR || 0, balance?.balanceFCFA || 0)}
+                icon={<PiggyBank className="w-4 h-4" />}
+                variant={isLowBalance ? 'danger' : 'default'}
+                subtitle={isLowBalance ? '⚠️ Solde bas' : undefined}
+              />
+
+              {/* 8. Tasks */}
+              <StatsCard
+                title="Tâches en attente"
+                value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
+                icon={<CheckSquare className="w-4 h-4" />}
+                variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
+              />
+            </div>
+          </>
+        ) : (
+          /* Staff mode: 6 KPI cards - 3 per row on desktop, 2 per row on mobile */
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            {/* 1. Revenue */}
+            <StatsCard
+              title={`Revenus ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+              value={formatAmount(selectedMonthRevenue.EUR, selectedMonthRevenue.FCFA)}
+              icon={<TrendingUp className="w-4 h-4" />}
+              variant="success"
+            />
+
+            {/* 2. Expenses */}
+            <StatsCard
+              title={`Dépenses ${format(selectedMonth, 'MMMM', { locale: fr })}`}
+              value={formatAmount(selectedMonthExpenses.EUR, selectedMonthExpenses.FCFA)}
+              icon={<DollarSign className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 3. Solde Mobile Money */}
+            <StatsCard
+              title="Solde Mobile Money"
+              value={formatAmount(balance?.balanceEUR || 0, balance?.balanceFCFA || 0)}
+              icon={<PiggyBank className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 4. Nights booked */}
+            <StatsCard
+              title="Nuits réservées"
+              value={nightsBooked}
+              icon={<Calendar className="w-4 h-4" />}
+              variant="default"
+            />
+
+            {/* 5. Tasks */}
+            <StatsCard
+              title="Tâches en attente"
+              value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
+              icon={<CheckSquare className="w-4 h-4" />}
+              variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
+            />
+
+            {/* 6. Unresolved Requests */}
+            <StatsCard
+              title="Demandes non résolues"
+              value={unresolvedRequestCount?.data || 0}
+              icon={<MessageSquare className="w-4 h-4" />}
+              variant={unresolvedRequestCount?.data && unresolvedRequestCount.data > 0 ? 'warning' : 'default'}
+            />
+          </div>
         )}
-
-        {/* 4. Solde Mobile Money */}
-        <StatsCard
-          title="Solde Mobile Money"
-          value={formatAmount(balance?.balanceEUR || 0, balance?.balanceFCFA || 0)}
-          icon={<PiggyBank className="w-4 h-4" />}
-          variant={isAdmin && isLowBalance ? 'danger' : 'default'}
-          subtitle={isAdmin && isLowBalance ? '⚠️ Solde bas' : undefined}
-        />
-
-        {/* 5. Nights booked */}
-        <StatsCard
-          title="Nuits réservées"
-          value={nightsBooked}
-          icon={<Calendar className="w-4 h-4" />}
-          variant="default"
-        />
-
-        {/* 6. Occupancy rate - Admin only */}
-        {isAdmin && (
-          <StatsCard
-            title="Taux d'occupation"
-            value={`${monthOccupancy.rate.toFixed(0)}%`}
-            subtitle={`${format(selectedMonth, 'MMMM yyyy', { locale: fr })}`}
-            icon={<Percent className="w-4 h-4" />}
-            variant="default"
-          />
-        )}
-
-        {/* 7. Average night price - Admin only */}
-        {isAdmin && (
-          <StatsCard
-            title="Prix moyen/nuit"
-            value={formatAmount(averageNightPrice.EUR, averageNightPrice.FCFA)}
-            icon={<DollarSign className="w-4 h-4" />}
-            variant="default"
-          />
-        )}
-
-        {/* 8. Tasks */}
-        <StatsCard
-          title="Tâches en attente"
-          value={(taskCounts?.todo || 0) + (taskCounts?.inProgress || 0)}
-          icon={<CheckSquare className="w-4 h-4" />}
-          variant={taskCounts && (taskCounts.todo + taskCounts.inProgress) > 5 ? 'warning' : 'default'}
-        />
-
-        {/* 9. Requests */}
-        <StatsCard
-          title="Demandes non résolues"
-          value={unresolvedRequests || 0}
-          icon={<AlertCircle className="w-4 h-4" />}
-          variant={unresolvedRequests && unresolvedRequests > 0 ? 'warning' : 'default'}
-        />
-        
-        {/* Empty placeholder for admin to maintain 2-column layout on mobile (9 cards -> 10 slots) */}
-        {isAdmin && <div className="md:hidden" />}
       </div>
 
       {/* Main content */}

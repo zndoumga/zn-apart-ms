@@ -6,7 +6,8 @@ interface AppState {
   // Mode
   mode: UserMode;
   switchToAdmin: (password: string, correctPassword: string) => boolean;
-  switchToStaff: () => void;
+  switchToStaff: (password: string, correctPassword: string) => boolean;
+  switchToInvestor: (password: string, correctPassword: string) => boolean;
   
   // Currency
   currency: Currency;
@@ -31,6 +32,10 @@ interface AppState {
   // Settings
   lowBalanceThreshold: number;
   setLowBalanceThreshold: (threshold: number) => void;
+  
+  // First time access
+  modeInitialized: boolean;
+  setModeInitialized: (initialized: boolean) => void;
 }
 
 // Generate unique ID for toasts
@@ -44,7 +49,7 @@ export const useAppStore = create<AppState>()(
       
       switchToAdmin: (password: string, correctPassword: string) => {
         if (password === correctPassword) {
-          set({ mode: 'admin' });
+          set({ mode: 'admin', modeInitialized: true });
           get().addToast({
             type: 'success',
             title: 'Mode Admin activé',
@@ -60,13 +65,40 @@ export const useAppStore = create<AppState>()(
         return false;
       },
       
-      switchToStaff: () => {
-        set({ mode: 'staff' });
+      switchToStaff: (password: string, correctPassword: string) => {
+        if (password === correctPassword) {
+          set({ mode: 'staff', modeInitialized: true });
+          get().addToast({
+            type: 'success',
+            title: 'Mode Staff activé',
+            message: 'Vous êtes maintenant en mode staff.',
+          });
+          return true;
+        }
         get().addToast({
-          type: 'info',
-          title: 'Mode Staff activé',
-          message: 'Vous êtes maintenant en mode staff.',
+          type: 'error',
+          title: 'Mot de passe incorrect',
+          message: 'Le mot de passe staff est incorrect.',
         });
+        return false;
+      },
+      
+      switchToInvestor: (password: string, correctPassword: string) => {
+        if (password === correctPassword) {
+          set({ mode: 'investor', modeInitialized: true });
+          get().addToast({
+            type: 'success',
+            title: 'Mode Investisseur activé',
+            message: 'Vous avez maintenant accès en lecture seule.',
+          });
+          return true;
+        }
+        get().addToast({
+          type: 'error',
+          title: 'Mot de passe incorrect',
+          message: 'Le mot de passe investisseur est incorrect.',
+        });
+        return false;
       },
       
       // Currency
@@ -105,6 +137,10 @@ export const useAppStore = create<AppState>()(
       // Settings
       lowBalanceThreshold: 100, // EUR
       setLowBalanceThreshold: (lowBalanceThreshold) => set({ lowBalanceThreshold }),
+      
+      // First time access
+      modeInitialized: false,
+      setModeInitialized: (modeInitialized) => set({ modeInitialized }),
     }),
     {
       name: 'zn-apartment-storage',
@@ -114,6 +150,7 @@ export const useAppStore = create<AppState>()(
         exchangeRate: state.exchangeRate,
         sidebarOpen: state.sidebarOpen,
         lowBalanceThreshold: state.lowBalanceThreshold,
+        modeInitialized: state.modeInitialized,
       }),
     }
   )
@@ -124,10 +161,12 @@ export const useMode = () => {
   const mode = useAppStore((state) => state.mode);
   const switchToAdmin = useAppStore((state) => state.switchToAdmin);
   const switchToStaff = useAppStore((state) => state.switchToStaff);
+  const switchToInvestor = useAppStore((state) => state.switchToInvestor);
   const isAdmin = mode === 'admin';
   const isStaff = mode === 'staff';
+  const isInvestor = mode === 'investor';
   
-  return { mode, switchToAdmin, switchToStaff, isAdmin, isStaff };
+  return { mode, switchToAdmin, switchToStaff, switchToInvestor, isAdmin, isStaff, isInvestor };
 };
 
 export const useCurrency = () => {

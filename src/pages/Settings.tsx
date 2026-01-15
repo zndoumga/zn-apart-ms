@@ -4,17 +4,21 @@ import { useForm } from 'react-hook-form';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
-import { useSettings, useUpdateSettings, useChangeAdminPassword } from '../hooks/useSettings';
+import { useSettings, useUpdateSettings, useChangeAdminPassword, useChangeInvestorPassword, useChangeStaffPassword } from '../hooks/useSettings';
 import { useToast } from '../store/useAppStore';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 const Settings: React.FC = () => {
   const { data: settings, isLoading } = useSettings();
   const updateSettings = useUpdateSettings();
-  const changePassword = useChangeAdminPassword();
+  const changeAdminPassword = useChangeAdminPassword();
+  const changeInvestorPassword = useChangeInvestorPassword();
+  const changeStaffPassword = useChangeStaffPassword();
   const { error } = useToast();
 
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showAdminPasswordForm, setShowAdminPasswordForm] = useState(false);
+  const [showInvestorPasswordForm, setShowInvestorPasswordForm] = useState(false);
+  const [showStaffPasswordForm, setShowStaffPasswordForm] = useState(false);
 
   const {
     register: registerSettings,
@@ -30,11 +34,11 @@ const Settings: React.FC = () => {
   });
 
   const {
-    register: registerPassword,
-    handleSubmit: handlePasswordSubmit,
-    reset: resetPassword,
-    watch,
-    formState: { errors: passwordErrors },
+    register: registerAdminPassword,
+    handleSubmit: handleAdminPasswordSubmit,
+    reset: resetAdminPassword,
+    watch: watchAdminPassword,
+    formState: { errors: adminPasswordErrors },
   } = useForm({
     defaultValues: {
       currentPassword: '',
@@ -43,7 +47,37 @@ const Settings: React.FC = () => {
     },
   });
 
-  const newPassword = watch('newPassword');
+  const {
+    register: registerInvestorPassword,
+    handleSubmit: handleInvestorPasswordSubmit,
+    reset: resetInvestorPassword,
+    watch: watchInvestorPassword,
+    formState: { errors: investorPasswordErrors },
+  } = useForm({
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    },
+  });
+
+  const {
+    register: registerStaffPassword,
+    handleSubmit: handleStaffPasswordSubmit,
+    reset: resetStaffPassword,
+    watch: watchStaffPassword,
+    formState: { errors: staffPasswordErrors },
+  } = useForm({
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    },
+  });
+
+  const newAdminPassword = watchAdminPassword('newPassword');
+  const newInvestorPassword = watchInvestorPassword('newPassword');
+  const newStaffPassword = watchStaffPassword('newPassword');
 
   const handleSaveSettings = async (data: {
     exchangeRate: number;
@@ -52,7 +86,7 @@ const Settings: React.FC = () => {
     await updateSettings.mutateAsync(data);
   };
 
-  const handleChangePassword = async (data: {
+  const handleChangeAdminPassword = async (data: {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
@@ -62,14 +96,56 @@ const Settings: React.FC = () => {
       return;
     }
 
-    const result = await changePassword.mutateAsync({
+    const result = await changeAdminPassword.mutateAsync({
       currentPassword: data.currentPassword,
       newPassword: data.newPassword,
     });
 
     if (result) {
-      setShowPasswordForm(false);
-      resetPassword();
+      setShowAdminPasswordForm(false);
+      resetAdminPassword();
+    }
+  };
+
+  const handleChangeInvestorPassword = async (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    if (data.newPassword !== data.confirmPassword) {
+      error('Erreur', 'Les mots de passe ne correspondent pas');
+      return;
+    }
+
+    const result = await changeInvestorPassword.mutateAsync({
+      currentPassword: data.currentPassword,
+      newPassword: data.newPassword,
+    });
+
+    if (result) {
+      setShowInvestorPasswordForm(false);
+      resetInvestorPassword();
+    }
+  };
+
+  const handleChangeStaffPassword = async (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    if (data.newPassword !== data.confirmPassword) {
+      error('Erreur', 'Les mots de passe ne correspondent pas');
+      return;
+    }
+
+    const result = await changeStaffPassword.mutateAsync({
+      currentPassword: data.currentPassword,
+      newPassword: data.newPassword,
+    });
+
+    if (result) {
+      setShowStaffPasswordForm(false);
+      resetStaffPassword();
     }
   };
 
@@ -134,70 +210,228 @@ const Settings: React.FC = () => {
             <h2 className="text-lg font-semibold">Sécurité</h2>
           </div>
         </CardHeader>
-        <CardBody>
-          {!showPasswordForm ? (
-            <div>
-              <p className="text-gray-600 mb-4">
-                Le mot de passe admin protège l'accès au mode administrateur.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => setShowPasswordForm(true)}
-                leftIcon={<Lock className="w-4 h-4" />}
-              >
-                Changer le mot de passe
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={handlePasswordSubmit(handleChangePassword)} className="space-y-4">
-              <Input
-                label="Mot de passe actuel"
-                type="password"
-                error={passwordErrors.currentPassword?.message}
-                {...registerPassword('currentPassword', {
-                  required: 'Mot de passe actuel requis',
-                })}
-              />
-              <Input
-                label="Nouveau mot de passe"
-                type="password"
-                error={passwordErrors.newPassword?.message}
-                {...registerPassword('newPassword', {
-                  required: 'Nouveau mot de passe requis',
-                  minLength: {
-                    value: 4,
-                    message: 'Minimum 4 caractères',
-                  },
-                })}
-              />
-              <Input
-                label="Confirmer le mot de passe"
-                type="password"
-                error={passwordErrors.confirmPassword?.message}
-                {...registerPassword('confirmPassword', {
-                  required: 'Confirmation requise',
-                  validate: (value) =>
-                    value === newPassword || 'Les mots de passe ne correspondent pas',
-                })}
-              />
-
-              <div className="flex gap-3 justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowPasswordForm(false);
-                    resetPassword();
-                  }}
-                >
-                  Annuler
-                </Button>
-                <Button type="submit" isLoading={changePassword.isPending}>
-                  Changer le mot de passe
-                </Button>
+        <CardBody className="space-y-6">
+          {/* Admin Password */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-medium text-gray-900">Mot de passe Admin</h3>
+                <p className="text-sm text-gray-600">
+                  Protège l'accès au mode administrateur
+                </p>
               </div>
-            </form>
-          )}
+              {!showAdminPasswordForm && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowAdminPasswordForm(true)}
+                  leftIcon={<Lock className="w-4 h-4" />}
+                >
+                  Modifier
+                </Button>
+              )}
+            </div>
+            {showAdminPasswordForm && (
+              <form onSubmit={handleAdminPasswordSubmit(handleChangeAdminPassword)} className="space-y-4">
+                <Input
+                  label="Mot de passe actuel"
+                  type="password"
+                  error={adminPasswordErrors.currentPassword?.message}
+                  {...registerAdminPassword('currentPassword', {
+                    required: 'Mot de passe actuel requis',
+                  })}
+                />
+                <Input
+                  label="Nouveau mot de passe"
+                  type="password"
+                  error={adminPasswordErrors.newPassword?.message}
+                  {...registerAdminPassword('newPassword', {
+                    required: 'Nouveau mot de passe requis',
+                    minLength: {
+                      value: 4,
+                      message: 'Minimum 4 caractères',
+                    },
+                  })}
+                />
+                <Input
+                  label="Confirmer le mot de passe"
+                  type="password"
+                  error={adminPasswordErrors.confirmPassword?.message}
+                  {...registerAdminPassword('confirmPassword', {
+                    required: 'Confirmation requise',
+                    validate: (value) =>
+                      value === newAdminPassword || 'Les mots de passe ne correspondent pas',
+                  })}
+                />
+
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowAdminPasswordForm(false);
+                      resetAdminPassword();
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button type="submit" isLoading={changeAdminPassword.isPending}>
+                    Changer le mot de passe
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-gray-200"></div>
+
+          {/* Investor Password */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-medium text-gray-900">Mot de passe Investisseur</h3>
+                <p className="text-sm text-gray-600">
+                  Protège l'accès au mode investisseur (lecture seule)
+                </p>
+              </div>
+              {!showInvestorPasswordForm && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowInvestorPasswordForm(true)}
+                  leftIcon={<Lock className="w-4 h-4" />}
+                >
+                  Modifier
+                </Button>
+              )}
+            </div>
+            {showInvestorPasswordForm && (
+              <form onSubmit={handleInvestorPasswordSubmit(handleChangeInvestorPassword)} className="space-y-4">
+                <Input
+                  label="Mot de passe actuel"
+                  type="password"
+                  error={investorPasswordErrors.currentPassword?.message}
+                  {...registerInvestorPassword('currentPassword', {
+                    required: 'Mot de passe actuel requis',
+                  })}
+                />
+                <Input
+                  label="Nouveau mot de passe"
+                  type="password"
+                  error={investorPasswordErrors.newPassword?.message}
+                  {...registerInvestorPassword('newPassword', {
+                    required: 'Nouveau mot de passe requis',
+                    minLength: {
+                      value: 4,
+                      message: 'Minimum 4 caractères',
+                    },
+                  })}
+                />
+                <Input
+                  label="Confirmer le mot de passe"
+                  type="password"
+                  error={investorPasswordErrors.confirmPassword?.message}
+                  {...registerInvestorPassword('confirmPassword', {
+                    required: 'Confirmation requise',
+                    validate: (value) =>
+                      value === newInvestorPassword || 'Les mots de passe ne correspondent pas',
+                  })}
+                />
+
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowInvestorPasswordForm(false);
+                      resetInvestorPassword();
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button type="submit" isLoading={changeInvestorPassword.isPending}>
+                    Changer le mot de passe
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-gray-200"></div>
+
+          {/* Staff Password */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-medium text-gray-900">Mot de passe Staff</h3>
+                <p className="text-sm text-gray-600">
+                  Protège l'accès au mode staff
+                </p>
+              </div>
+              {!showStaffPasswordForm && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowStaffPasswordForm(true)}
+                  leftIcon={<Lock className="w-4 h-4" />}
+                >
+                  Modifier
+                </Button>
+              )}
+            </div>
+            {showStaffPasswordForm && (
+              <form onSubmit={handleStaffPasswordSubmit(handleChangeStaffPassword)} className="space-y-4">
+                <Input
+                  label="Mot de passe actuel"
+                  type="password"
+                  error={staffPasswordErrors.currentPassword?.message}
+                  {...registerStaffPassword('currentPassword', {
+                    required: 'Mot de passe actuel requis',
+                  })}
+                />
+                <Input
+                  label="Nouveau mot de passe"
+                  type="password"
+                  error={staffPasswordErrors.newPassword?.message}
+                  {...registerStaffPassword('newPassword', {
+                    required: 'Nouveau mot de passe requis',
+                    minLength: {
+                      value: 4,
+                      message: 'Minimum 4 caractères',
+                    },
+                  })}
+                />
+                <Input
+                  label="Confirmer le mot de passe"
+                  type="password"
+                  error={staffPasswordErrors.confirmPassword?.message}
+                  {...registerStaffPassword('confirmPassword', {
+                    required: 'Confirmation requise',
+                    validate: (value) =>
+                      value === newStaffPassword || 'Les mots de passe ne correspondent pas',
+                  })}
+                />
+
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowStaffPasswordForm(false);
+                      resetStaffPassword();
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button type="submit" isLoading={changeStaffPassword.isPending}>
+                    Changer le mot de passe
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
         </CardBody>
       </Card>
 
