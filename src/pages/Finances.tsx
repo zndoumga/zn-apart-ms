@@ -10,7 +10,7 @@ import {
   X,
   Moon,
 } from 'lucide-react';
-import { useCurrency } from '../store/useAppStore';
+import { useCurrency, useMode } from '../store/useAppStore';
 import { roundFCFAToNearest25, formatFCFAWithSeparator } from '../utils/currency';
 import {
   LineChart,
@@ -105,6 +105,10 @@ const formatAxisLabel = (value: number, currency: string): string => {
 
 const Finances: React.FC = () => {
   const { formatAmount, currency } = useCurrency();
+  const { isAdmin } = useMode();
+  
+  // Property filter state
+  const [selectedProperty, setSelectedProperty] = useState<string>('');
   
   // Helper function to format tooltip values with FCFA rounding and separator
   const formatTooltipValue = (value: number): string => {
@@ -152,17 +156,42 @@ const Finances: React.FC = () => {
   // Queries - must be declared before dateRange useMemo
   const { data: bookings, isLoading: loadingBookings } = useBookings();
   const { data: expenses, isLoading: loadingExpenses } = useExpenses();
-  const { data: properties } = useProperties(true);
+  const { data: allProperties } = useProperties(true);
   const { data: expensesByCategory } = useExpensesByCategory();
+
+  // Filter properties: A2 only visible in admin mode
+  const properties = useMemo(() => {
+    if (!allProperties) return [];
+    return allProperties.filter(p => {
+      // Hide A2 from non-admin users
+      if (!isAdmin && p.name.toLowerCase().includes('a2')) {
+        return false;
+      }
+      return true;
+    });
+  }, [allProperties, isAdmin]);
+
+  // Filter bookings and expenses by selected property
+  const filteredBookings = useMemo(() => {
+    if (!bookings) return [];
+    if (!selectedProperty) return bookings;
+    return bookings.filter(b => b.propertyId === selectedProperty);
+  }, [bookings, selectedProperty]);
+
+  const filteredExpenses = useMemo(() => {
+    if (!expenses) return [];
+    if (!selectedProperty) return expenses;
+    return expenses.filter(e => e.propertyId === selectedProperty);
+  }, [expenses, selectedProperty]);
 
   // Date range for KPI cards
   const dateRange = useMemo(() => {
     const today = new Date();
     let defaultStart: Date;
     
-    // If no start date is selected, use the minimum check-in date from bookings
-    if (!dateRangeStart && bookings && bookings.length > 0) {
-      const checkInDates = bookings
+    // If no start date is selected, use the minimum check-in date from filtered bookings
+    if (!dateRangeStart && filteredBookings && filteredBookings.length > 0) {
+      const checkInDates = filteredBookings
         .filter(b => b.status !== 'cancelled' && b.checkIn)
         .map(b => new Date(b.checkIn));
       
@@ -180,7 +209,7 @@ const Finances: React.FC = () => {
     const start = dateRangeStart ? new Date(dateRangeStart) : defaultStart;
     const end = dateRangeEnd ? new Date(dateRangeEnd) : today;
     return { startDate: start, endDate: end };
-  }, [dateRangeStart, dateRangeEnd, bookings]);
+  }, [dateRangeStart, dateRangeEnd, filteredBookings]);
 
   // Chart period calculation
   const chartDateRange = useMemo(() => {
@@ -223,40 +252,45 @@ const Finances: React.FC = () => {
 
   // Calculations
   const metrics = useMemo(() => {
-    if (!bookings || !expenses || !properties) return null;
+    if (!filteredBookings || !filteredExpenses || !properties) return null;
 
     const currentRevenue = calculateTotalRevenue(
-      bookings,
+      filteredBookings,
       dateRange.startDate,
       dateRange.endDate
     );
     const currentExpenses = calculateTotalExpenses(
-      expenses,
+      filteredExpenses,
       dateRange.startDate,
       dateRange.endDate
     );
 
+    // Filter properties for occupancy calculation based on selected property
+    const propertiesForOccupancy = selectedProperty 
+      ? properties.filter(p => p.id === selectedProperty)
+      : properties;
+
     const occupancyRate = calculateOccupancyRate(
-      bookings,
-      properties,
+      filteredBookings,
+      propertiesForOccupancy,
       dateRange.startDate,
       dateRange.endDate
     );
 
     const nightsBooked = calculateNightsBooked(
-      bookings,
+      filteredBookings,
       dateRange.startDate,
       dateRange.endDate
     );
 
     const avgDailyRate = calculateAverageNightPrice(
-      bookings,
+      filteredBookings,
       dateRange.startDate,
       dateRange.endDate
     );
 
     // Filter bookings in period (excluding cancelled)
-    const bookingsInPeriod = bookings.filter(
+    const bookingsInPeriod = filteredBookings.filter(
       (b) => {
         const checkIn = new Date(b.checkIn);
         const checkOut = new Date(b.checkOut);
@@ -304,11 +338,11 @@ const Finances: React.FC = () => {
       netIncome,
       roi,
     };
-  }, [bookings, expenses, properties, dateRange]);
+  }, [filteredBookings, filteredExpenses, properties, dateRange, selectedProperty]);
 
   // Monthly data for charts based on chart period
   const monthlyData = useMemo(() => {
-    if (!bookings || !expenses || !properties) return [];
+    if (!filteredBookings || !filteredExpenses || !properties) return [];
 
     const { startDate, endDate } = chartDateRange;
     const months: { 
@@ -338,12 +372,15 @@ const Finances: React.FC = () => {
       const monthStart = startOfMonth(currentMonth);
       const monthEnd = endOfMonth(currentMonth);
       
-      const monthRevenue = calculateTotalRevenue(bookings, monthStart, monthEnd);
-      const monthExpenses = calculateTotalExpenses(expenses, monthStart, monthEnd);
-      const nightsBooked = calculateNightsBooked(bookings, monthStart, monthEnd);
+      const monthRevenue = calculateTotalRevenue(filteredBookings, monthStart, monthEnd);
+      const monthExpenses = calculateTotalExpenses(filteredExpenses, monthStart, monthEnd);
+      const nightsBooked = calculateNightsBooked(filteredBookings, monthStart, monthEnd);
       const avgNightPriceEUR = nightsBooked > 0 ? monthRevenue.EUR / nightsBooked : 0;
       const avgNightPriceFCFA = nightsBooked > 0 ? monthRevenue.FCFA / nightsBooked : 0;
-      const occupancyRate = calculateOccupancyRate(bookings, properties, monthStart, monthEnd);
+      const propertiesForOccupancy = selectedProperty 
+        ? properties.filter(p => p.id === selectedProperty)
+        : properties;
+      const occupancyRate = calculateOccupancyRate(filteredBookings, propertiesForOccupancy, monthStart, monthEnd);
       
       // Calculate monthly profit
       const monthlyProfitEUR = monthRevenue.EUR - monthExpenses.EUR;
@@ -373,18 +410,18 @@ const Finances: React.FC = () => {
     }
     
     return months;
-  }, [bookings, expenses, properties, chartDateRange]);
+  }, [filteredBookings, filteredExpenses, properties, chartDateRange, selectedProperty]);
 
   // Booking channels distribution by month (percentage of bookings by channel)
   const channelDataByMonth = useMemo(() => {
-    if (!bookings) return { months: [], channels: [] };
+    if (!filteredBookings) return { months: [], channels: [] };
 
     const { startDate, endDate } = chartDateRange;
     const months: { month: string; [channel: string]: number | string }[] = [];
     const allChannels = new Set<string>();
     
     // First, collect all channels
-    bookings.forEach((b) => {
+    filteredBookings.forEach((b) => {
       if (b.status !== 'cancelled') {
         allChannels.add(b.source);
       }
@@ -407,7 +444,7 @@ const Finances: React.FC = () => {
       });
       
       // Count bookings by channel for this month
-      const monthBookings = bookings.filter((b) => {
+      const monthBookings = filteredBookings.filter((b) => {
         const checkIn = new Date(b.checkIn);
         return b.status !== 'cancelled' && checkIn >= monthStart && checkIn <= monthEnd;
       });
@@ -439,21 +476,21 @@ const Finances: React.FC = () => {
     });
     
     return { months, channels: sortedChannels };
-  }, [bookings, chartDateRange]);
+  }, [filteredBookings, chartDateRange]);
 
   // Get all unique categories for the date range
   const allExpenseCategories = useMemo(() => {
-    if (!expenses) return new Set<string>();
+    if (!filteredExpenses) return new Set<string>();
     const { startDate, endDate } = chartDateRange;
     const categories = new Set<string>();
-    expenses.forEach((e) => {
+    filteredExpenses.forEach((e) => {
       const expenseDate = new Date(e.date);
       if (expenseDate >= startDate && expenseDate <= endDate) {
         categories.add(e.category);
       }
     });
     return categories;
-  }, [expenses, chartDateRange]);
+  }, [filteredExpenses, chartDateRange]);
 
   // Initialize selected categories with all categories on first load
   useEffect(() => {
@@ -465,7 +502,7 @@ const Finances: React.FC = () => {
 
   // Expense breakdown by month (by category)
   const expenseBreakdownByMonth = useMemo(() => {
-    if (!expenses) return { months: [], categories: [] };
+    if (!filteredExpenses) return { months: [], categories: [] };
 
     const { startDate, endDate } = chartDateRange;
     const months: { month: string; [category: string]: number | string }[] = [];
@@ -500,7 +537,7 @@ const Finances: React.FC = () => {
       // Sum expenses by category for this month
       // For selected categories, sum the actual values
       // For unselected categories, set to 0 (so they appear in legend but not in chart)
-      expenses.forEach((expense) => {
+      filteredExpenses.forEach((expense) => {
         const expenseDate = new Date(expense.date);
         if (expenseDate >= monthStart && expenseDate <= monthEnd) {
           if (categoriesToShow.includes(expense.category)) {
@@ -516,7 +553,7 @@ const Finances: React.FC = () => {
     }
     
     return { months, categories: Array.from(allExpenseCategories) };
-  }, [expenses, chartDateRange, selectedExpenseCategories, allExpenseCategories]);
+  }, [filteredExpenses, chartDateRange, selectedExpenseCategories, allExpenseCategories]);
 
 
   const isLoading = loadingBookings || loadingExpenses;
@@ -552,17 +589,35 @@ const Finances: React.FC = () => {
     setShowDatePicker(false);
   };
 
+  // Property options for selector
+  const propertyOptions = useMemo(() => {
+    return [
+      { value: '', label: 'Tous les appartements' },
+      ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
+    ];
+  }, [properties]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tableau de bord KPI</h1>
           <p className="text-gray-600 mt-1">Analyse de vos performances financières</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Période KPI:</span>
-          <div className="relative" ref={datePickerRef}>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Property selector */}
+          <div className="w-48">
+            <Select
+              options={propertyOptions}
+              value={selectedProperty}
+              onChange={setSelectedProperty}
+              placeholder="Sélectionner un appartement"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Période KPI:</span>
+            <div className="relative" ref={datePickerRef}>
               <button
                 onClick={() => setShowDatePicker(!showDatePicker)}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer hover:bg-gray-50 ${
@@ -621,6 +676,7 @@ const Finances: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
 
       {/* Section 1: KPI Cards */}
       <div className="space-y-4">
