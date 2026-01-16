@@ -16,6 +16,15 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
       onChange?.(e.target.checked);
     };
 
+    const handleDivClick = () => {
+      if (!props.disabled) {
+        const syntheticEvent = {
+          target: { checked: !checked },
+        } as React.ChangeEvent<HTMLInputElement>;
+        handleChange(syntheticEvent);
+      }
+    };
+
     return (
       <div className={clsx('flex items-start', className)}>
         <div className="flex items-center h-5">
@@ -30,10 +39,12 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
               {...props}
             />
             <div
+              onClick={handleDivClick}
               className={clsx(
                 'w-4 h-4 border rounded transition-colors cursor-pointer',
                 'peer-focus:ring-2 peer-focus:ring-primary-500 peer-focus:ring-offset-2',
                 'peer-disabled:opacity-50 peer-disabled:cursor-not-allowed',
+                props.disabled ? 'cursor-not-allowed' : 'cursor-pointer',
                 checked
                   ? 'bg-primary-600 border-primary-600'
                   : 'bg-white border-gray-300 hover:border-gray-400'
@@ -50,6 +61,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
             {label && (
               <label
                 htmlFor={checkboxId}
+                onClick={handleDivClick}
                 className="text-sm font-medium text-gray-700 cursor-pointer"
               >
                 {label}

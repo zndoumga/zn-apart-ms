@@ -9,6 +9,7 @@ import {
   CalendarRange,
   X,
   Moon,
+  FileText,
 } from 'lucide-react';
 import { useCurrency, useMode } from '../store/useAppStore';
 import { roundFCFAToNearest25, formatFCFAWithSeparator } from '../utils/currency';
@@ -35,6 +36,8 @@ import DatePicker from '../components/ui/DatePicker';
 import StatsCard from '../components/dashboard/StatsCard';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import Button from '../components/ui/Button';
+import IncomeStatementModal from '../components/finances/IncomeStatementModal';
 import { useBookings } from '../hooks/useBookings';
 import { useExpenses, useExpensesByCategory } from '../hooks/useExpenses';
 import { useProperties } from '../hooks/useProperties';
@@ -109,6 +112,9 @@ const Finances: React.FC = () => {
   
   // Property filter state
   const [selectedProperty, setSelectedProperty] = useState<string>('');
+  
+  // Income statement modal state
+  const [showIncomeStatement, setShowIncomeStatement] = useState(false);
   
   // Helper function to format tooltip values with FCFA rounding and separator
   const formatTooltipValue = (value: number): string => {
@@ -606,6 +612,14 @@ const Finances: React.FC = () => {
           <p className="text-gray-600 mt-1">Analyse de vos performances financières</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Income Statement Button */}
+          <Button
+            onClick={() => setShowIncomeStatement(true)}
+            variant="primary"
+            leftIcon={<FileText className="w-4 h-4" />}
+          >
+            État des résultats
+          </Button>
           {/* Property selector */}
           <div className="w-48">
             <Select
@@ -1322,6 +1336,17 @@ const Finances: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Income Statement Modal */}
+      <IncomeStatementModal
+        isOpen={showIncomeStatement}
+        onClose={() => setShowIncomeStatement(false)}
+        bookings={filteredBookings}
+        expenses={filteredExpenses}
+        properties={properties}
+        selectedProperty={selectedProperty || undefined}
+        currency={currency}
+      />
     </div>
   );
 };
