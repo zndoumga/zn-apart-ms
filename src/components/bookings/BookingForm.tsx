@@ -225,13 +225,18 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
   // Calculate total price from number of nights and night rate
   useEffect(() => {
-    if (numberOfNights && numberOfNights > 0 && nightRateEUR && nightRateEUR > 0 && lastChangedField === 'nightRate') {
-      const totalEUR = numberOfNights * nightRateEUR;
-      const totalFCFA = Math.round(totalEUR * exchangeRate);
-      if (totalEUR !== totalPriceEUR) {
-        setValue('totalPriceEUR', totalEUR, { shouldValidate: false });
-        setValue('totalPriceFCFA', totalFCFA, { shouldValidate: false });
-        setLastChangedField(null);
+    if (numberOfNights && numberOfNights > 0 && nightRateEUR && nightRateEUR > 0) {
+      // Only calculate when night rate is explicitly changed (not when nights change)
+      const shouldCalculate = lastChangedField === 'nightRate';
+      
+      if (shouldCalculate && lastChangedField !== 'totalPrice') {
+        const totalEUR = numberOfNights * nightRateEUR;
+        const totalFCFA = Math.round(totalEUR * exchangeRate);
+        if (Math.abs(totalEUR - (totalPriceEUR || 0)) > 0.01) {
+          setValue('totalPriceEUR', totalEUR, { shouldValidate: false });
+          setValue('totalPriceFCFA', totalFCFA, { shouldValidate: false });
+          setLastChangedField(null);
+        }
       }
     }
   }, [numberOfNights, nightRateEUR, totalPriceEUR, exchangeRate, setValue, lastChangedField]);
@@ -239,13 +244,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
   // Calculate night rate from total price and number of nights
   useEffect(() => {
     if (numberOfNights && numberOfNights > 0 && totalPriceEUR && totalPriceEUR > 0) {
-      // Calculate if total price was changed OR if night rate is not set/zero OR if nights changed
-      const shouldCalculate = 
-        lastChangedField === 'totalPrice' || 
-        lastChangedField === 'nights' ||
-        !nightRateEUR || 
-        nightRateEUR === 0 ||
-        (lastChangedField === null && numberOfNights > 0 && totalPriceEUR > 0);
+      // Only calculate if total price was explicitly changed (not when nights change)
+      const shouldCalculate = lastChangedField === 'totalPrice';
       
       // Don't calculate if user is actively editing night rate
       if (shouldCalculate && lastChangedField !== 'nightRate') {
@@ -254,29 +254,18 @@ const BookingForm: React.FC<BookingFormProps> = ({
         if (Math.abs(rateEUR - (nightRateEUR || 0)) > 0.01) {
           setValue('nightRateEUR', parseFloat(rateEUR.toFixed(2)), { shouldValidate: false });
           setValue('nightRateFCFA', rateFCFA, { shouldValidate: false });
-          if (lastChangedField === 'totalPrice' || lastChangedField === 'nights') {
-            setLastChangedField(null);
-          }
+          setLastChangedField(null);
         }
       }
     }
   }, [numberOfNights, totalPriceEUR, nightRateEUR, exchangeRate, setValue, lastChangedField]);
 
-  // Sync night rate FCFA when EUR changes (for night rate currency toggle)
-  useEffect(() => {
-    if (nightRateEUR && nightRateEUR > 0 && lastChangedField === 'nightRate') {
-      const fcfaValue = Math.round(nightRateEUR * exchangeRate);
-      if (fcfaValue !== nightRateFCFA) {
-        setValue('nightRateFCFA', fcfaValue, { shouldValidate: false });
-      }
-    }
-  }, [nightRateEUR, nightRateFCFA, exchangeRate, setValue, lastChangedField]);
-
-  // Auto-fill price from property (only if not manually set)
+  // Auto-fill price from property (only when dates are set, not when nights are manually entered)
   useEffect(() => {
     if (selectedPropertyId && !initialData && lastChangedField === null) {
       const property = properties?.find((p) => p.id === selectedPropertyId);
-      if (property && checkIn && checkOut && (!nightRateEUR || nightRateEUR === 0)) {
+      // Only auto-fill if dates are set AND no prices have been manually entered
+      if (property && checkIn && checkOut && (!nightRateEUR || nightRateEUR === 0) && (!totalPriceEUR || totalPriceEUR === 0)) {
         const nights = calculateNights(checkIn, checkOut);
         if (nights > 0) {
           const eurPrice = property.basePriceEUR * nights;
@@ -288,7 +277,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         }
       }
     }
-  }, [selectedPropertyId, properties, setValue, initialData, checkIn, checkOut, exchangeRate, nightRateEUR, lastChangedField]);
+  }, [selectedPropertyId, properties, setValue, initialData, checkIn, checkOut, exchangeRate, nightRateEUR, totalPriceEUR, lastChangedField]);
 
   // Handle EUR input change
   const handleEURChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -506,36 +495,68 @@ const BookingForm: React.FC<BookingFormProps> = ({
             </div>
           </div>
           {nightRateCurrency === 'EUR' ? (
-            <Input
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="0.00"
-              error={errors.nightRateEUR?.message}
-              {...register('nightRateEUR', {
-                valueAsNumber: true,
-                min: { value: 0, message: 'Prix invalide' },
-                onChange: () => setLastChangedField('nightRate'),
-              })}
+            <Controller
+              name="nightRateEUR"
+              control={control}
+              rules={{ min: { value: 0, message: 'Prix invalide' } }}
+              render={({ field }) => (
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="0.00"
+                  error={errors.nightRateEUR?.message}
+                  value={field.value || ''}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    field.onChange(value);
+                    setLastChangedField('nightRate');
+                    // Sync FCFA
+                    if (value > 0) {
+                      setValue('nightRateFCFA', Math.round(value * exchangeRate), { shouldValidate: false });
+                    } else {
+                      setValue('nightRateFCFA', 0, { shouldValidate: false });
+                    }
+                  }}
+                />
+              )}
             />
           ) : (
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="0"
-              error={errors.nightRateFCFA?.message}
-              {...register('nightRateFCFA', {
-                valueAsNumber: true,
-                min: { value: 0, message: 'Prix invalide' },
-                onChange: () => {
-                  setLastChangedField('nightRate');
-                  const fcfaValue = parseFloat((document.querySelector('[name="nightRateFCFA"]') as HTMLInputElement)?.value || '0');
-                  if (fcfaValue > 0) {
-                    setValue('nightRateEUR', parseFloat((fcfaValue / exchangeRate).toFixed(2)), { shouldValidate: false });
-                  }
-                },
-              })}
+            <Controller
+              name="nightRateFCFA"
+              control={control}
+              rules={{ min: { value: 0, message: 'Prix invalide' } }}
+              render={({ field }) => (
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  error={errors.nightRateFCFA?.message}
+                  value={field.value || ''}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    // Allow empty input while typing
+                    if (inputValue === '') {
+                      field.onChange(undefined);
+                      setValue('nightRateEUR', undefined, { shouldValidate: false });
+                      return;
+                    }
+                    const value = parseFloat(inputValue);
+                    if (!isNaN(value) && value >= 0) {
+                      field.onChange(value);
+                      setLastChangedField('nightRate');
+                      // Sync EUR
+                      if (value > 0) {
+                        const eurValue = parseFloat((value / exchangeRate).toFixed(2));
+                        setValue('nightRateEUR', eurValue, { shouldValidate: false });
+                      } else {
+                        setValue('nightRateEUR', 0, { shouldValidate: false });
+                      }
+                    }
+                  }}
+                />
+              )}
             />
           )}
           {nightRateCurrency === 'EUR' && nightRateEUR && nightRateEUR > 0 && (
