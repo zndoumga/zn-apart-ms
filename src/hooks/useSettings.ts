@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import {
   getSettings,
   updateSettings,
@@ -12,10 +13,27 @@ import { useAppStore, useToast } from '../store/useAppStore';
 export const SETTINGS_QUERY_KEY = ['settings'];
 
 export function useSettings() {
-  return useQuery({
+  const setExchangeRate = useAppStore((state) => state.setExchangeRate);
+  const setLowBalanceThreshold = useAppStore((state) => state.setLowBalanceThreshold);
+  
+  const query = useQuery({
     queryKey: SETTINGS_QUERY_KEY,
     queryFn: getSettings,
   });
+
+  // Sync settings to Zustand store when loaded
+  useEffect(() => {
+    if (query.data) {
+      if (query.data.exchangeRate !== undefined) {
+        setExchangeRate(query.data.exchangeRate);
+      }
+      if (query.data.lowBalanceThreshold !== undefined) {
+        setLowBalanceThreshold(query.data.lowBalanceThreshold);
+      }
+    }
+  }, [query.data, setExchangeRate, setLowBalanceThreshold]);
+
+  return query;
 }
 
 export function useUpdateSettings() {
@@ -23,6 +41,7 @@ export function useUpdateSettings() {
   const { success, error } = useToast();
   const mode = useAppStore((state) => state.mode);
   const setExchangeRate = useAppStore((state) => state.setExchangeRate);
+  const setLowBalanceThreshold = useAppStore((state) => state.setLowBalanceThreshold);
 
   return useMutation({
     mutationFn: (data: Partial<Omit<Settings, 'updatedAt'>>) =>
@@ -30,8 +49,12 @@ export function useUpdateSettings() {
     onSuccess: (updatedSettings) => {
       queryClient.invalidateQueries({ queryKey: SETTINGS_QUERY_KEY });
       // Update the local exchange rate in Zustand store
-      if (updatedSettings.exchangeRate) {
+      if (updatedSettings.exchangeRate !== undefined) {
         setExchangeRate(updatedSettings.exchangeRate);
+      }
+      // Update the low balance threshold in Zustand store
+      if (updatedSettings.lowBalanceThreshold !== undefined) {
+        setLowBalanceThreshold(updatedSettings.lowBalanceThreshold);
       }
       success('Paramètres mis à jour', 'Les paramètres ont été enregistrés.');
     },

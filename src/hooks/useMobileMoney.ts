@@ -86,12 +86,15 @@ export function useDeleteTransaction() {
 export const useAddTransfer = useCreateTransaction;
 
 // Check if balance is low
-const LOW_BALANCE_THRESHOLD = 50000; // FCFA
-
 export function useIsBalanceLow() {
   const { data: balance } = useCurrentBalance();
+  const lowBalanceThresholdEUR = useAppStore((state) => state.lowBalanceThreshold);
+  const exchangeRate = useAppStore((state) => state.exchangeRate);
+  
+  // Convert threshold from EUR to FCFA
+  const lowBalanceThresholdFCFA = lowBalanceThresholdEUR * exchangeRate;
   
   return {
-    data: balance ? balance.balanceFCFA < LOW_BALANCE_THRESHOLD : false,
+    data: balance ? balance.balanceFCFA < lowBalanceThresholdFCFA : false,
   };
 }

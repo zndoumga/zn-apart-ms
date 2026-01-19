@@ -42,7 +42,8 @@ const Expenses: React.FC = () => {
 
   // State
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [propertyFilter, setPropertyFilter] = useState<string>('');
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
@@ -65,6 +66,7 @@ const Expenses: React.FC = () => {
   const datePickerRef = useRef<HTMLDivElement>(null);
   const datePickerButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Queries
   const { data: expenses, isLoading } = useExpenses();
@@ -105,9 +107,13 @@ const Expenses: React.FC = () => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(target)) {
         setShowExportMenu(false);
       }
+      // Handle category dropdown
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
+        setShowCategoryDropdown(false);
+      }
     };
     
-    if (showDatePicker) {
+    if (showDatePicker || showCategoryDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
@@ -116,7 +122,7 @@ const Expenses: React.FC = () => {
       window.removeEventListener('resize', updatePosition);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDatePicker]);
+  }, [showDatePicker, showCategoryDropdown]);
 
   // Filter expenses
   const filteredExpenses = useMemo(() => {
@@ -126,7 +132,7 @@ const Expenses: React.FC = () => {
       const matchesSearch =
         !search ||
         expense.description.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = !categoryFilter || expense.category === categoryFilter;
+      const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(expense.category);
       const matchesProperty =
         !propertyFilter ||
         (propertyFilter === 'general' ? !expense.propertyId : expense.propertyId === propertyFilter);
@@ -304,12 +310,25 @@ const Expenses: React.FC = () => {
     ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
   ];
 
-  const categoryOptions = [
-    { value: '', label: 'Catégorie' },
-    ...EXPENSE_CATEGORIES,
-  ];
+  const categoryOptions = EXPENSE_CATEGORIES;
 
-  const hasActiveFilters = categoryFilter || propertyFilter || dateRangeStart || dateRangeEnd;
+  const handleCategoryToggle = (categoryValue: string) => {
+    setCategoryFilter((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryValue)) {
+        newSet.delete(categoryValue);
+      } else {
+        newSet.add(categoryValue);
+      }
+      return newSet;
+    });
+  };
+
+  const handleClearCategories = () => {
+    setCategoryFilter(new Set());
+  };
+
+  const hasActiveFilters = categoryFilter.size > 0 || propertyFilter || dateRangeStart || dateRangeEnd;
 
   const columns = [
     {
@@ -536,20 +555,69 @@ const Expenses: React.FC = () => {
               />
             </div>
 
-            {/* Category filter */}
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className={`px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                categoryFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
-              }`}
-            >
-              {categoryOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            {/* Category filter - Multi-select dropdown */}
+            <div className="relative" ref={categoryDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className={`px-3 py-1.5 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2 ${
+                  categoryFilter.size > 0 ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                <span>
+                  {categoryFilter.size === 0
+                    ? 'Catégorie'
+                    : categoryFilter.size === 1
+                    ? categoryOptions.find((opt) => categoryFilter.has(opt.value))?.label || 'Catégorie'
+                    : `${categoryFilter.size} catégories`}
+                </span>
+                {categoryFilter.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearCategories();
+                    }}
+                    className="ml-1 hover:bg-primary-100 rounded p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </button>
+              {showCategoryDropdown && (
+                <div className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                  <div className="p-2">
+                    <div className="flex items-center justify-between mb-2 px-2">
+                      <span className="text-xs font-medium text-gray-700">Sélectionner les catégories</span>
+                      {categoryFilter.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearCategories}
+                          className="text-xs text-primary-600 hover:text-primary-700"
+                        >
+                          Effacer
+                        </button>
+                      )}
+                    </div>
+                    {categoryOptions.map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={categoryFilter.has(opt.value)}
+                          onChange={() => handleCategoryToggle(opt.value)}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Property filter */}
             <select
@@ -633,7 +701,7 @@ const Expenses: React.FC = () => {
             {hasActiveFilters && (
               <button
                 onClick={() => {
-                  setCategoryFilter('');
+                  setCategoryFilter(new Set());
                   setPropertyFilter('');
                   clearDateRange();
                 }}
@@ -707,20 +775,69 @@ const Expenses: React.FC = () => {
                 />
               </div>
               
-              {/* Category dropdown - half width */}
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className={`px-3 py-2 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 h-[38px] ${
-                  categoryFilter ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
-                }`}
-              >
-                {categoryOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {/* Category filter - Multi-select dropdown */}
+              <div className="relative" ref={categoryDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 h-[38px] flex items-center justify-between ${
+                    categoryFilter.size > 0 ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Filter className="w-4 h-4" />
+                    {categoryFilter.size === 0
+                      ? 'Catégorie'
+                      : categoryFilter.size === 1
+                      ? categoryOptions.find((opt) => categoryFilter.has(opt.value))?.label || 'Catégorie'
+                      : `${categoryFilter.size} catégories`}
+                  </span>
+                  {categoryFilter.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearCategories();
+                      }}
+                      className="ml-1 hover:bg-primary-100 rounded p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </button>
+                {showCategoryDropdown && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                    <div className="p-2">
+                      <div className="flex items-center justify-between mb-2 px-2">
+                        <span className="text-xs font-medium text-gray-700">Sélectionner les catégories</span>
+                        {categoryFilter.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearCategories}
+                            className="text-xs text-primary-600 hover:text-primary-700"
+                          >
+                            Effacer
+                          </button>
+                        )}
+                      </div>
+                      {categoryOptions.map((opt) => (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={categoryFilter.has(opt.value)}
+                            onChange={() => handleCategoryToggle(opt.value)}
+                            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-700">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Row 2: Property + Date Range */}
