@@ -33,6 +33,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [receiptFile, setReceiptFile] = React.useState<File[]>([]);
   const [inputCurrency, setInputCurrency] = React.useState<Currency>('EUR');
 
+  // Find default property "Nvlle Route Omnisport A1"
+  const defaultPropertyId = React.useMemo(() => {
+    if (!properties) return undefined;
+    const defaultProperty = properties.find(p => 
+      p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+      p.name.toLowerCase().includes('nouvelle route omnisport a1')
+    );
+    return defaultProperty?.id || undefined;
+  }, [properties]);
+
   const {
     register,
     handleSubmit,
@@ -63,6 +73,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
           paidFromMobileMoney: true,
         },
   });
+
+  // Set default property when properties are loaded and form is not editing
+  React.useEffect(() => {
+    if (!initialData && defaultPropertyId && properties) {
+      setValue('propertyId', defaultPropertyId);
+    }
+  }, [defaultPropertyId, properties, initialData, setValue]);
 
   const paidFromMobileMoney = watch('paidFromMobileMoney');
 

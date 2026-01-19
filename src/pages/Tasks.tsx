@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Building2, Search } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import Button from '../components/ui/Button';
@@ -51,6 +51,7 @@ const Tasks: React.FC = () => {
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<TaskFormData>({
     defaultValues: {
@@ -62,13 +63,30 @@ const Tasks: React.FC = () => {
     },
   });
 
+  // Set default property when properties are loaded
+  useEffect(() => {
+    if (defaultPropertyId && properties) {
+      setValue('propertyId', defaultPropertyId);
+    }
+  }, [defaultPropertyId, properties, setValue]);
+
+  // Find default property "Nvlle Route Omnisport A1"
+  const defaultPropertyId = React.useMemo(() => {
+    if (!properties) return '';
+    const defaultProperty = properties.find(p => 
+      p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+      p.name.toLowerCase().includes('nouvelle route omnisport a1')
+    );
+    return defaultProperty?.id || '';
+  }, [properties]);
+
   const handleOpenCreate = () => {
     reset({
       title: '',
       description: '',
       priority: 'medium',
       assignedTo: 'staff',
-      propertyId: '',
+      propertyId: defaultPropertyId,
     });
     setShowForm(true);
   };

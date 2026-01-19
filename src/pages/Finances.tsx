@@ -165,6 +165,19 @@ const Finances: React.FC = () => {
   const { data: allProperties } = useProperties(true);
   const { data: expensesByCategory } = useExpensesByCategory();
 
+  // Set default property "Nvlle Route Omnisport A1" when properties are loaded
+  React.useEffect(() => {
+    if (allProperties && !selectedProperty) {
+      const defaultProperty = allProperties.find(p => 
+        p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+        p.name.toLowerCase().includes('nouvelle route omnisport a1')
+      );
+      if (defaultProperty) {
+        setSelectedProperty(defaultProperty.id);
+      }
+    }
+  }, [allProperties, selectedProperty]);
+
   // Filter properties: A2 only visible in admin mode
   const properties = useMemo(() => {
     if (!allProperties) return [];

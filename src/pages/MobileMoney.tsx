@@ -9,6 +9,7 @@ import DatePicker from '../components/ui/DatePicker';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import CurrencyToggle from '../components/ui/CurrencyToggle';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import {
   useCurrentBalance,
@@ -47,6 +48,7 @@ const MobileMoney: React.FC = () => {
     control,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<TransferFormData>({
     defaultValues: {
@@ -57,30 +59,95 @@ const MobileMoney: React.FC = () => {
       date: formatForInput(new Date()),
       reference: '',
     },
+    mode: 'onChange', // Validate on change to catch errors early
+  });
+  
+  // Register amount fields for validation (hidden fields)
+  register('amountEUR', {
+    required: false, // We'll validate manually
+    valueAsNumber: true,
+  });
+  register('amountFCFA', {
+    required: false, // We'll validate manually
+    valueAsNumber: true,
   });
 
   const transactionType = watch('type');
   const amountEUR = watch('amountEUR');
+  const amountFCFA = watch('amountFCFA');
+  const [inputCurrency, setInputCurrency] = useState<'EUR' | 'FCFA'>('EUR');
+  const [inputAmount, setInputAmount] = useState<number>(0);
+
+  // Calculate the other currency when input amount or currency changes
+  React.useEffect(() => {
+    if (inputAmount > 0 && exchangeRate > 0) {
+      if (inputCurrency === 'EUR') {
+        const calculatedFCFA = Math.round(inputAmount * exchangeRate);
+        setValue('amountEUR', inputAmount, { shouldValidate: true, shouldDirty: false });
+        setValue('amountFCFA', calculatedFCFA, { shouldValidate: true, shouldDirty: false });
+      } else {
+        const calculatedEUR = parseFloat((inputAmount / exchangeRate).toFixed(2));
+        setValue('amountFCFA', inputAmount, { shouldValidate: true, shouldDirty: false });
+        setValue('amountEUR', calculatedEUR, { shouldValidate: true, shouldDirty: false });
+      }
+    } else if (editingTransaction && inputAmount > 0) {
+      // When editing, ensure form fields are synced
+      if (inputCurrency === 'EUR') {
+        const calculatedFCFA = Math.round(inputAmount * exchangeRate);
+        setValue('amountEUR', inputAmount, { shouldValidate: true, shouldDirty: false });
+        setValue('amountFCFA', calculatedFCFA, { shouldValidate: true, shouldDirty: false });
+      } else {
+        const calculatedEUR = parseFloat((inputAmount / exchangeRate).toFixed(2));
+        setValue('amountFCFA', inputAmount, { shouldValidate: true, shouldDirty: false });
+        setValue('amountEUR', calculatedEUR, { shouldValidate: true, shouldDirty: false });
+      }
+    }
+  }, [inputAmount, inputCurrency, exchangeRate, setValue, editingTransaction]);
+
+  // Generate default description if none provided
+  const generateDefaultDescription = (type: 'deposit' | 'withdrawal', amountFCFA: number, date: string | Date): string => {
+    const dateStr = typeof date === 'string' ? formatDate(date) : formatDate(date);
+    const amountStr = amountFCFA.toLocaleString();
+    return type === 'deposit' 
+      ? `Dépôt ${amountStr} FCFA le ${dateStr}`
+      : `Retrait ${amountStr} FCFA le ${dateStr}`;
+  };
 
   const handleAddTransaction = async (data: TransferFormData) => {
-    // Calculate FCFA from EUR if not provided
+    // Ensure both amounts are set based on input currency
+    const calculatedEUR = inputCurrency === 'EUR' 
+      ? inputAmount 
+      : (inputAmount > 0 ? parseFloat((inputAmount / exchangeRate).toFixed(2)) : 0);
+    const calculatedFCFA = inputCurrency === 'FCFA' 
+      ? inputAmount 
+      : (inputAmount > 0 ? Math.round(inputAmount * exchangeRate) : 0);
+    
     const formData = {
       ...data,
-      amountFCFA: data.amountFCFA || Math.round(data.amountEUR * exchangeRate),
+      amountEUR: calculatedEUR,
+      amountFCFA: calculatedFCFA,
+      description: data.description?.trim() || generateDefaultDescription(data.type, calculatedFCFA, data.date),
     };
     await createTransaction.mutateAsync(formData);
     setShowTransfer(false);
     reset();
+    setInputAmount(0);
+    setInputCurrency('EUR');
   };
 
   const handleEditTransaction = (transaction: MobileMoneyTransaction) => {
     if (transaction.type !== 'deposit') return; // Only allow editing deposits
     setEditingTransaction(transaction);
+    // Set input to EUR by default, user can toggle
+    setInputCurrency('EUR');
+    // Ensure we have a valid amount
+    const initialAmount = transaction.amountEUR || transaction.amountFCFA / exchangeRate || 0;
+    setInputAmount(initialAmount);
     reset({
       type: transaction.type,
-      amountEUR: transaction.amountEUR,
-      amountFCFA: transaction.amountFCFA,
-      description: transaction.description,
+      amountEUR: transaction.amountEUR || 0,
+      amountFCFA: transaction.amountFCFA || 0,
+      description: transaction.description || '',
       date: formatForInput(transaction.date),
       reference: transaction.reference || '',
     });
@@ -88,15 +155,82 @@ const MobileMoney: React.FC = () => {
   };
 
   const handleUpdateTransaction = async (data: TransferFormData) => {
-    if (!editingTransaction) return;
-    const formData = {
-      ...data,
-      amountFCFA: data.amountFCFA || Math.round(data.amountEUR * exchangeRate),
+    if (!editingTransaction) {
+      console.error('No editing transaction set');
+      return;
+    }
+    
+    // Use inputAmount if it's set and valid, otherwise use the form data or editing transaction data
+    let finalAmount = inputAmount;
+    if (!finalAmount || finalAmount <= 0 || isNaN(finalAmount)) {
+      // Fall back to form data based on selected currency
+      finalAmount = inputCurrency === 'EUR' ? (data.amountEUR || 0) : (data.amountFCFA || 0);
+    }
+    
+    // If still no valid amount, use the original transaction amount
+    if (!finalAmount || finalAmount <= 0 || isNaN(finalAmount)) {
+      finalAmount = inputCurrency === 'EUR' 
+        ? (editingTransaction.amountEUR || 0)
+        : (editingTransaction.amountFCFA || 0);
+    }
+    
+    // Final validation - ensure we have a valid amount
+    if (!finalAmount || finalAmount <= 0 || isNaN(finalAmount)) {
+      // Show validation error - don't return silently
+      console.error('Invalid amount for update:', { inputAmount, finalAmount, inputCurrency, formData: data, editingTransaction });
+      alert('Veuillez saisir un montant valide');
+      return;
+    }
+    
+    // Calculate both amounts
+    const calculatedEUR = inputCurrency === 'EUR' 
+      ? finalAmount 
+      : parseFloat((finalAmount / exchangeRate).toFixed(2));
+    const calculatedFCFA = inputCurrency === 'FCFA' 
+      ? finalAmount 
+      : Math.round(finalAmount * exchangeRate);
+    
+    // Validate calculated amounts
+    if (!calculatedEUR || calculatedEUR <= 0 || !calculatedFCFA || calculatedFCFA <= 0 || isNaN(calculatedEUR) || isNaN(calculatedFCFA)) {
+      console.error('Invalid calculated amounts:', { calculatedEUR, calculatedFCFA, finalAmount, inputCurrency, exchangeRate });
+      alert('Erreur de calcul des montants');
+      return;
+    }
+    
+    const formData: TransferFormData = {
+      type: data.type || editingTransaction.type,
+      amountEUR: calculatedEUR,
+      amountFCFA: calculatedFCFA,
+      description: (data.description?.trim() || '') || generateDefaultDescription(data.type || editingTransaction.type, calculatedFCFA, data.date || editingTransaction.date),
+      date: data.date || editingTransaction.date,
+      reference: data.reference || editingTransaction.reference || '',
     };
-    await updateTransaction.mutateAsync({ id: editingTransaction.id, data: formData });
-    setShowTransfer(false);
-    setEditingTransaction(null);
-    reset();
+    
+    // Log the data being sent for debugging
+    console.log('Updating transaction with data:', {
+      id: editingTransaction.id,
+      formData,
+      inputAmount,
+      finalAmount,
+      inputCurrency,
+      originalTransaction: editingTransaction,
+    });
+    
+    try {
+      await updateTransaction.mutateAsync({ id: editingTransaction.id, data: formData });
+      setShowTransfer(false);
+      setEditingTransaction(null);
+      reset();
+      setInputAmount(0);
+      setInputCurrency('EUR');
+    } catch (error) {
+      console.error('Error updating transaction - full error:', error);
+      // Error is handled by the mutation hook, but let's also show it here
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+    }
   };
 
   const handleDelete = async () => {
@@ -422,11 +556,22 @@ const MobileMoney: React.FC = () => {
           setShowTransfer(false);
           setEditingTransaction(null);
           reset();
+          setInputAmount(0);
+          setInputCurrency('EUR');
         }}
         title={editingTransaction ? "Modifier la transaction" : "Nouvelle transaction"}
         size="md"
       >
-        <form onSubmit={handleSubmit(editingTransaction ? handleUpdateTransaction : handleAddTransaction)} className="space-y-4">
+        <form onSubmit={handleSubmit(
+          editingTransaction ? handleUpdateTransaction : handleAddTransaction,
+          (errors) => {
+            console.error('Form validation errors:', errors);
+            // If there are validation errors, show them
+            if (Object.keys(errors).length > 0) {
+              console.error('Validation failed:', errors);
+            }
+          }
+        )} className="space-y-4">
           <Controller
             name="type"
             control={control}
@@ -441,22 +586,56 @@ const MobileMoney: React.FC = () => {
           />
 
           <div>
-            <Input
-              label="Montant (EUR)"
-              type="number"
-              min={0}
-              step={0.01}
-              error={errors.amountEUR?.message}
-              required
-              {...register('amountEUR', {
-                valueAsNumber: true,
-                required: 'Montant requis',
-                min: { value: 0.01, message: 'Montant invalide' },
-              })}
-            />
-            {amountEUR > 0 && (
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label={`Montant (${inputCurrency === 'EUR' ? 'EUR' : 'FCFA'})`}
+                  type="number"
+                  min={0}
+                  step={inputCurrency === 'EUR' ? 0.01 : 1}
+                  value={inputAmount || ''}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    setInputAmount(value);
+                    if (inputCurrency === 'EUR') {
+                      setValue('amountEUR', value, { shouldValidate: true });
+                      setValue('amountFCFA', value > 0 ? Math.round(value * exchangeRate) : 0, { shouldValidate: false });
+                    } else {
+                      setValue('amountFCFA', value, { shouldValidate: true });
+                      setValue('amountEUR', value > 0 ? parseFloat((value / exchangeRate).toFixed(2)) : 0, { shouldValidate: false });
+                    }
+                  }}
+                  error={inputAmount <= 0 ? 'Montant requis' : (errors.amountEUR?.message || errors.amountFCFA?.message)}
+                  required
+                />
+              </div>
+              <div className="pb-2">
+                <CurrencyToggle
+                  value={inputCurrency}
+                  onChange={(currency) => {
+                    setInputCurrency(currency);
+                    // Convert current amount when switching currency
+                    if (inputAmount > 0 && exchangeRate > 0) {
+                      if (currency === 'EUR') {
+                        // Currently in FCFA, convert to EUR
+                        const convertedEUR = parseFloat((inputAmount / exchangeRate).toFixed(2));
+                        setInputAmount(convertedEUR);
+                      } else {
+                        // Currently in EUR, convert to FCFA
+                        const convertedFCFA = Math.round(inputAmount * exchangeRate);
+                        setInputAmount(convertedFCFA);
+                      }
+                    }
+                  }}
+                  size="md"
+                />
+              </div>
+            </div>
+            {inputAmount > 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                ≈ {Math.round(amountEUR * exchangeRate).toLocaleString()} FCFA
+                {inputCurrency === 'EUR' 
+                  ? `≈ ${Math.round(inputAmount * exchangeRate).toLocaleString()} FCFA`
+                  : `≈ ${(inputAmount / exchangeRate).toFixed(2)} €`}
               </p>
             )}
           </div>
@@ -479,8 +658,7 @@ const MobileMoney: React.FC = () => {
             label="Description"
             placeholder="Description de la transaction..."
             error={errors.description?.message}
-            required
-            {...register('description', { required: 'Description requise' })}
+            {...register('description')}
           />
 
           <Input

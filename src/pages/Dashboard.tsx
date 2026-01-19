@@ -52,6 +52,19 @@ const Dashboard: React.FC = () => {
   const { data: bookings } = useBookings();
   const { data: expenses } = useExpenses();
   const { data: properties } = useProperties(true);
+
+  // Set default property "Nvlle Route Omnisport A1" when properties are loaded
+  React.useEffect(() => {
+    if (properties && !selectedProperty) {
+      const defaultProperty = properties.find(p => 
+        p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+        p.name.toLowerCase().includes('nouvelle route omnisport a1')
+      );
+      if (defaultProperty) {
+        setSelectedProperty(defaultProperty.id);
+      }
+    }
+  }, [properties, selectedProperty]);
   const { data: taskCounts } = useTaskCounts();
   const { data: unresolvedRequestCount } = useUnresolvedRequestCount();
   const { data: balance } = useCurrentBalance();

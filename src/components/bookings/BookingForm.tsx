@@ -12,6 +12,7 @@ import { useProperties } from '../../hooks/useProperties';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useCurrency } from '../../store/useAppStore';
 import { calculateNights, formatForInput } from '../../utils/dates';
+import { addDays, parseISO } from 'date-fns';
 import type { BookingFormData, Booking, Customer } from '../../types';
 import { BOOKING_SOURCES, BOOKING_FORM_STATUSES, PAYMENT_STATUSES } from '../../types';
 
@@ -26,6 +27,9 @@ const bookingSchema = z.object({
   guests: z.number().min(1, 'Au moins 1 invité'),
   totalPriceEUR: z.number().min(0, 'Prix invalide'),
   totalPriceFCFA: z.number().min(0, 'Prix invalide'),
+  numberOfNights: z.number().min(1, 'Nombre de nuits requis').optional(),
+  nightRateEUR: z.number().min(0).optional(),
+  nightRateFCFA: z.number().min(0).optional(),
   source: z.enum(['airbnb', 'booking', 'direct', 'other']),
   status: z.enum(['inquiry', 'confirmed', 'checked_in', 'checked_out', 'cancelled']),
   paymentStatus: z.enum(['pending', 'partial', 'paid']).optional(),
@@ -53,10 +57,21 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const { data: customers } = useCustomers();
   const { formatAmount, exchangeRate } = useCurrency();
   const [inputCurrency, setInputCurrency] = useState<InputCurrency>('EUR');
+  const [nightRateCurrency, setNightRateCurrency] = useState<InputCurrency>('EUR');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Find default property "Nvlle Route Omnisport A1"
+  const defaultPropertyId = useMemo(() => {
+    if (!properties) return '';
+    const defaultProperty = properties.find(p => 
+      p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+      p.name.toLowerCase().includes('nouvelle route omnisport a1')
+    );
+    return defaultProperty?.id || '';
+  }, [properties]);
 
   const {
     register,
@@ -92,12 +107,22 @@ const BookingForm: React.FC<BookingFormProps> = ({
           guests: 2,
           totalPriceEUR: 0,
           totalPriceFCFA: 0,
+          numberOfNights: undefined,
+          nightRateEUR: undefined,
+          nightRateFCFA: undefined,
           source: 'airbnb',
           status: 'confirmed',
           paymentStatus: 'pending',
           notes: '',
         },
   });
+
+  // Set default property when properties are loaded and form is not editing
+  useEffect(() => {
+    if (!initialData && defaultPropertyId && properties) {
+      setValue('propertyId', defaultPropertyId);
+    }
+  }, [defaultPropertyId, properties, initialData, setValue]);
 
   const guestName = watch('guestName');
 
@@ -162,26 +187,113 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const checkOut = watch('checkOut');
   const totalPriceEUR = watch('totalPriceEUR');
   const totalPriceFCFA = watch('totalPriceFCFA');
+  const numberOfNights = watch('numberOfNights');
+  const nightRateEUR = watch('nightRateEUR');
+  const nightRateFCFA = watch('nightRateFCFA');
   const selectedPropertyId = watch('propertyId');
+  
+  // Track which field was last changed to avoid circular updates
+  const [lastChangedField, setLastChangedField] = useState<'checkIn' | 'checkOut' | 'nights' | 'nightRate' | 'totalPrice' | null>(null);
 
-  // Auto-fill price from property
+  // Calculate number of nights from check-in and check-out dates
   useEffect(() => {
-    if (selectedPropertyId && !initialData) {
-      const property = properties?.find((p) => p.id === selectedPropertyId);
-      if (property && checkIn && checkOut) {
-        const nights = calculateNights(checkIn, checkOut);
-        if (nights > 0) {
-          const eurPrice = property.basePriceEUR * nights;
-          setValue('totalPriceEUR', eurPrice);
-          setValue('totalPriceFCFA', Math.round(eurPrice * exchangeRate));
+    if (checkIn && checkOut && lastChangedField !== 'nights') {
+      const nights = calculateNights(checkIn, checkOut);
+      if (nights > 0 && nights !== numberOfNights) {
+        setValue('numberOfNights', nights, { shouldValidate: false });
+        setLastChangedField(null);
+      }
+    }
+  }, [checkIn, checkOut, numberOfNights, setValue, lastChangedField]);
+
+  // Calculate check-out date from check-in and number of nights
+  useEffect(() => {
+    if (checkIn && numberOfNights && numberOfNights > 0 && lastChangedField === 'nights') {
+      try {
+        const checkInDate = parseISO(checkIn);
+        const checkOutDate = addDays(checkInDate, numberOfNights);
+        const checkOutStr = formatForInput(checkOutDate);
+        if (checkOutStr !== checkOut) {
+          setValue('checkOut', checkOutStr, { shouldValidate: false });
+          setLastChangedField(null);
+        }
+      } catch (error) {
+        console.error('Error calculating check-out date:', error);
+      }
+    }
+  }, [checkIn, numberOfNights, checkOut, setValue, lastChangedField]);
+
+  // Calculate total price from number of nights and night rate
+  useEffect(() => {
+    if (numberOfNights && numberOfNights > 0 && nightRateEUR && nightRateEUR > 0 && lastChangedField === 'nightRate') {
+      const totalEUR = numberOfNights * nightRateEUR;
+      const totalFCFA = Math.round(totalEUR * exchangeRate);
+      if (totalEUR !== totalPriceEUR) {
+        setValue('totalPriceEUR', totalEUR, { shouldValidate: false });
+        setValue('totalPriceFCFA', totalFCFA, { shouldValidate: false });
+        setLastChangedField(null);
+      }
+    }
+  }, [numberOfNights, nightRateEUR, totalPriceEUR, exchangeRate, setValue, lastChangedField]);
+
+  // Calculate night rate from total price and number of nights
+  useEffect(() => {
+    if (numberOfNights && numberOfNights > 0 && totalPriceEUR && totalPriceEUR > 0) {
+      // Calculate if total price was changed OR if night rate is not set/zero OR if nights changed
+      const shouldCalculate = 
+        lastChangedField === 'totalPrice' || 
+        lastChangedField === 'nights' ||
+        !nightRateEUR || 
+        nightRateEUR === 0 ||
+        (lastChangedField === null && numberOfNights > 0 && totalPriceEUR > 0);
+      
+      // Don't calculate if user is actively editing night rate
+      if (shouldCalculate && lastChangedField !== 'nightRate') {
+        const rateEUR = totalPriceEUR / numberOfNights;
+        const rateFCFA = Math.round(rateEUR * exchangeRate);
+        if (Math.abs(rateEUR - (nightRateEUR || 0)) > 0.01) {
+          setValue('nightRateEUR', parseFloat(rateEUR.toFixed(2)), { shouldValidate: false });
+          setValue('nightRateFCFA', rateFCFA, { shouldValidate: false });
+          if (lastChangedField === 'totalPrice' || lastChangedField === 'nights') {
+            setLastChangedField(null);
+          }
         }
       }
     }
-  }, [selectedPropertyId, properties, setValue, initialData, checkIn, checkOut, exchangeRate]);
+  }, [numberOfNights, totalPriceEUR, nightRateEUR, exchangeRate, setValue, lastChangedField]);
+
+  // Sync night rate FCFA when EUR changes (for night rate currency toggle)
+  useEffect(() => {
+    if (nightRateEUR && nightRateEUR > 0 && lastChangedField === 'nightRate') {
+      const fcfaValue = Math.round(nightRateEUR * exchangeRate);
+      if (fcfaValue !== nightRateFCFA) {
+        setValue('nightRateFCFA', fcfaValue, { shouldValidate: false });
+      }
+    }
+  }, [nightRateEUR, nightRateFCFA, exchangeRate, setValue, lastChangedField]);
+
+  // Auto-fill price from property (only if not manually set)
+  useEffect(() => {
+    if (selectedPropertyId && !initialData && lastChangedField === null) {
+      const property = properties?.find((p) => p.id === selectedPropertyId);
+      if (property && checkIn && checkOut && (!nightRateEUR || nightRateEUR === 0)) {
+        const nights = calculateNights(checkIn, checkOut);
+        if (nights > 0) {
+          const eurPrice = property.basePriceEUR * nights;
+          const rateEUR = property.basePriceEUR;
+          setValue('totalPriceEUR', eurPrice, { shouldValidate: false });
+          setValue('totalPriceFCFA', Math.round(eurPrice * exchangeRate), { shouldValidate: false });
+          setValue('nightRateEUR', rateEUR, { shouldValidate: false });
+          setValue('nightRateFCFA', Math.round(rateEUR * exchangeRate), { shouldValidate: false });
+        }
+      }
+    }
+  }, [selectedPropertyId, properties, setValue, initialData, checkIn, checkOut, exchangeRate, nightRateEUR, lastChangedField]);
 
   // Handle EUR input change
   const handleEURChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const eurValue = parseFloat(e.target.value) || 0;
+    setLastChangedField('totalPrice');
     setValue('totalPriceEUR', eurValue);
     setValue('totalPriceFCFA', Math.round(eurValue * exchangeRate));
   };
@@ -189,6 +301,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   // Handle FCFA input change
   const handleFCFAChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fcfaValue = parseFloat(e.target.value) || 0;
+    setLastChangedField('totalPrice');
     setValue('totalPriceFCFA', fcfaValue);
     setValue('totalPriceEUR', Math.round((fcfaValue / exchangeRate) * 100) / 100);
   };
@@ -221,7 +334,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full">
-      <div className="space-y-6 flex-1 overflow-y-auto pr-1">
+      <div className="space-y-4 flex-1 overflow-y-auto pr-1">
       {/* Property selection */}
       <Controller
         name="propertyId"
@@ -311,6 +424,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
               error={errors.checkIn?.message}
               required
               {...field}
+              onChange={(value) => {
+                setLastChangedField('checkIn');
+                field.onChange(value);
+              }}
             />
           )}
         />
@@ -323,23 +440,118 @@ const BookingForm: React.FC<BookingFormProps> = ({
               error={errors.checkOut?.message}
               required
               {...field}
+              onChange={(value) => {
+                setLastChangedField('checkOut');
+                field.onChange(value);
+              }}
             />
           )}
         />
       </div>
 
-      {/* Guests */}
-      <Input
-        label="Nombre d'invités"
-        type="number"
-        min={1}
-        error={errors.guests?.message}
-        required
-        {...register('guests', { valueAsNumber: true })}
-      />
+      {/* Number of Nights and Guests side by side */}
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Nombre de nuits"
+          type="number"
+          min={1}
+          error={errors.numberOfNights?.message}
+          {...register('numberOfNights', {
+            valueAsNumber: true,
+            min: { value: 1, message: 'Au moins 1 nuit requise' },
+            onChange: () => setLastChangedField('nights'),
+          })}
+        />
+        <Input
+          label="Nombre d'invités"
+          type="number"
+          min={1}
+          error={errors.guests?.message}
+          required
+          {...register('guests', { valueAsNumber: true })}
+        />
+      </div>
 
-      {/* Price with currency toggle */}
-      <div className="space-y-3">
+      {/* Night Rate and Total Price side by side */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Night Rate with currency toggle */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">
+              Prix par nuit
+            </label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setNightRateCurrency('EUR')}
+                className={`px-3 py-1 text-sm font-medium transition-colors ${
+                  nightRateCurrency === 'EUR'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                EUR
+              </button>
+              <button
+                type="button"
+                onClick={() => setNightRateCurrency('FCFA')}
+                className={`px-3 py-1 text-sm font-medium transition-colors ${
+                  nightRateCurrency === 'FCFA'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                FCFA
+              </button>
+            </div>
+          </div>
+          {nightRateCurrency === 'EUR' ? (
+            <Input
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="0.00"
+              error={errors.nightRateEUR?.message}
+              {...register('nightRateEUR', {
+                valueAsNumber: true,
+                min: { value: 0, message: 'Prix invalide' },
+                onChange: () => setLastChangedField('nightRate'),
+              })}
+            />
+          ) : (
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="0"
+              error={errors.nightRateFCFA?.message}
+              {...register('nightRateFCFA', {
+                valueAsNumber: true,
+                min: { value: 0, message: 'Prix invalide' },
+                onChange: () => {
+                  setLastChangedField('nightRate');
+                  const fcfaValue = parseFloat((document.querySelector('[name="nightRateFCFA"]') as HTMLInputElement)?.value || '0');
+                  if (fcfaValue > 0) {
+                    setValue('nightRateEUR', parseFloat((fcfaValue / exchangeRate).toFixed(2)), { shouldValidate: false });
+                  }
+                },
+              })}
+            />
+          )}
+          {nightRateCurrency === 'EUR' && nightRateEUR && nightRateEUR > 0 && (
+            <p className="text-xs text-gray-500">
+              ≈ {Math.round(nightRateEUR * exchangeRate).toLocaleString()} FCFA
+            </p>
+          )}
+          {nightRateCurrency === 'FCFA' && nightRateFCFA && nightRateFCFA > 0 && (
+            <p className="text-xs text-gray-500">
+              ≈ {(nightRateFCFA / exchangeRate).toFixed(2)} €
+            </p>
+          )}
+        </div>
+
+        {/* Price with currency toggle */}
+        <div className="space-y-3">
         <div className="flex items-center justify-between">
           <label className="block text-sm font-medium text-gray-700">
             Prix total <span className="text-danger-500">*</span>
@@ -383,7 +595,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
               placeholder="0.00"
             />
             {totalPriceFCFA > 0 && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 ≈ {totalPriceFCFA.toLocaleString()} FCFA
               </p>
             )}
@@ -401,15 +613,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">FCFA</span>
             {totalPriceEUR > 0 && (
-              <p className="text-sm text-gray-500 mt-1">
-                ≈ {totalPriceEUR.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              <p className="text-xs text-gray-500 mt-1">
+                ≈ {totalPriceEUR.toFixed(2)} €
               </p>
             )}
           </div>
         )}
-        {(errors.totalPriceEUR || errors.totalPriceFCFA) && (
-          <p className="text-sm text-danger-600">{errors.totalPriceEUR?.message || errors.totalPriceFCFA?.message}</p>
-        )}
+          {(errors.totalPriceEUR || errors.totalPriceFCFA) && (
+            <p className="text-xs text-danger-600">{errors.totalPriceEUR?.message || errors.totalPriceFCFA?.message}</p>
+          )}
+        </div>
       </div>
 
       {/* Total calculation */}
@@ -424,8 +637,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
         </div>
       )}
 
-      {/* Source, status, and payment status */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Source, status, and payment status - side by side */}
+      <div className="grid grid-cols-3 gap-4">
         <Controller
           name="source"
           control={control}
@@ -450,22 +663,20 @@ const BookingForm: React.FC<BookingFormProps> = ({
             />
           )}
         />
+        <Controller
+          name="paymentStatus"
+          control={control}
+          render={({ field }) => (
+            <Select
+              label="Statut de paiement"
+              options={PAYMENT_STATUSES}
+              error={errors.paymentStatus?.message}
+              {...field}
+              value={field.value || 'pending'}
+            />
+          )}
+        />
       </div>
-
-      {/* Payment status */}
-      <Controller
-        name="paymentStatus"
-        control={control}
-        render={({ field }) => (
-          <Select
-            label="Statut de paiement"
-            options={PAYMENT_STATUSES}
-            error={errors.paymentStatus?.message}
-            {...field}
-            value={field.value || 'pending'}
-          />
-        )}
-      />
 
       {/* Notes */}
       <TextArea
