@@ -46,6 +46,16 @@ const Tasks: React.FC = () => {
   const deleteTask = useDeleteTask();
   const updateTaskStatus = useUpdateTaskStatus();
 
+  // Find default property "Nvlle Route Omnisport A1"
+  const defaultPropertyId = React.useMemo(() => {
+    if (!properties) return '';
+    const defaultProperty = properties.find(p => 
+      p.name.toLowerCase().includes('nvlle route omnisport a1') ||
+      p.name.toLowerCase().includes('nouvelle route omnisport a1')
+    );
+    return defaultProperty?.id || '';
+  }, [properties]);
+
   const {
     register,
     handleSubmit,
@@ -69,16 +79,6 @@ const Tasks: React.FC = () => {
       setValue('propertyId', defaultPropertyId);
     }
   }, [defaultPropertyId, properties, setValue]);
-
-  // Find default property "Nvlle Route Omnisport A1"
-  const defaultPropertyId = React.useMemo(() => {
-    if (!properties) return '';
-    const defaultProperty = properties.find(p => 
-      p.name.toLowerCase().includes('nvlle route omnisport a1') ||
-      p.name.toLowerCase().includes('nouvelle route omnisport a1')
-    );
-    return defaultProperty?.id || '';
-  }, [properties]);
 
   const handleOpenCreate = () => {
     reset({
