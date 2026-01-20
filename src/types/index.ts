@@ -131,7 +131,6 @@ export interface BookingFormData {
 
 // Expense types
 export type ExpenseCategory =
-  | 'cleaning'
   | 'maintenance'
   | 'utilities'
   | 'supplies'
@@ -496,7 +495,6 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: 'utilities', label: 'Charges (Eau, Électricité, Internet)' },
   { value: 'canal_sat', label: 'Canal+' },
   { value: 'common_areas', label: 'Parties communes' },
-  { value: 'cleaning', label: 'Nettoyage' },
   { value: 'laundry', label: 'Blanchisserie' },
   { value: 'consumables', label: 'Consommables (Savon, Huile, etc.)' },
   { value: 'cleaning_material', label: 'Matériel de nettoyage' },

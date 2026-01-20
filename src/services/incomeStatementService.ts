@@ -43,6 +43,7 @@ export interface IncomeStatementData {
   fixedCosts: {
     rent: number[];
     commonAreas: number[];
+    internet: number[];
     total: number[];
   };
   grossProfit: number[];
@@ -146,10 +147,14 @@ export function generateIncomeStatementData(
   const commonAreasCosts = periods.map(p => 
     getExpensesByCategory(filteredExpenses, 'common_areas', p.startDate, p.endDate)
   );
+  const internetCosts = periods.map(p => 
+    getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'Internet')
+  );
   const fixedCosts = {
     rent: rentCosts,
     commonAreas: commonAreasCosts,
-    total: periods.map((p, i) => rentCosts[i] + commonAreasCosts[i]),
+    internet: internetCosts,
+    total: periods.map((p, i) => rentCosts[i] + commonAreasCosts[i] + internetCosts[i]),
   };
 
   // Gross profit
@@ -159,11 +164,10 @@ export function generateIncomeStatementData(
   // Get all expenses by category for each period, ensuring uncategorized expenses go to "other"
   const allExpensesByPeriod = periods.map(p => getAllExpensesByCategory(filteredExpenses, p.startDate, p.endDate));
   
-  // Utilities breakdown
-  const utilitiesInternet = periods.map(p => getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'Internet'));
+  // Utilities breakdown (Internet moved to fixed costs)
   const utilitiesElectricity = periods.map(p => getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'ENEO'));
   const utilitiesWater = periods.map(p => getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'camwater'));
-  const utilities = periods.map((p, i) => utilitiesInternet[i] + utilitiesElectricity[i] + utilitiesWater[i]);
+  const utilities = periods.map((p, i) => utilitiesElectricity[i] + utilitiesWater[i]);
   
   // Merge cleaning and cleaning_material
   const cleaning = periods.map((p, i) => 
@@ -207,7 +211,6 @@ export function generateIncomeStatementData(
   // Now construct the object with total
   const operationalCosts = {
     utilities,
-    utilitiesInternet,
     utilitiesElectricity,
     utilitiesWater,
     canal_sat,
@@ -274,12 +277,15 @@ export function generateIncomeStatementData(
     );
     const comparisonFixedCosts = lastYearPeriods.map(p => {
       const periodExpenses = getAllExpensesByCategory(filteredExpenses, p.startDate, p.endDate);
-      return (periodExpenses.rent || 0) + (periodExpenses.common_areas || 0);
+      const internetCost = getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'Internet');
+      return (periodExpenses.rent || 0) + (periodExpenses.common_areas || 0) + internetCost;
     });
     const comparisonOperationalCosts = lastYearPeriods.map(p => {
       const periodExpenses = getAllExpensesByCategory(filteredExpenses, p.startDate, p.endDate);
-      // Sum all operational categories (excluding fixed costs: rent and common_areas)
-      return (periodExpenses.utilities || 0) +
+      // Sum all operational categories (excluding fixed costs: rent, common_areas, and internet)
+      const internetCost = getExpensesByCategory(filteredExpenses, 'utilities', p.startDate, p.endDate, 'Internet');
+      const utilitiesWithoutInternet = (periodExpenses.utilities || 0) - internetCost;
+      return utilitiesWithoutInternet +
              (periodExpenses.canal_sat || 0) +
              (periodExpenses.cleaning || 0) +
              (periodExpenses.cleaning_material || 0) +
@@ -326,16 +332,17 @@ export function generateIncomeStatementData(
     const ytdExpenses = getAllExpensesByCategory(filteredExpenses, ytdStart, ytdEnd);
     const ytdTotalExpensesResult = calculateTotalExpenses(filteredExpenses, ytdStart, ytdEnd);
     
+    const ytdInternetCost = getExpensesByCategory(filteredExpenses, 'utilities', ytdStart, ytdEnd, 'Internet');
     ytd = {
       revenue: {
         total: (ytdRevenue && typeof ytdRevenue === 'object' && 'FCFA' in ytdRevenue) ? ytdRevenue.FCFA : 0,
       },
       fixedCosts: {
-        total: (ytdExpenses.rent || 0) + (ytdExpenses.common_areas || 0),
+        total: (ytdExpenses.rent || 0) + (ytdExpenses.common_areas || 0) + ytdInternetCost,
       },
       grossProfit: 0, // Will calculate below
       operationalCosts: {
-        total: (ytdExpenses.utilities || 0) +
+        total: (ytdExpenses.utilities || 0) - ytdInternetCost + // Subtract internet from utilities
                (ytdExpenses.canal_sat || 0) +
                (ytdExpenses.cleaning || 0) +
                (ytdExpenses.cleaning_material || 0) +
@@ -561,7 +568,7 @@ function getCategoryLabel(category: string): string {
     utilities: 'Charges (Eau, Électricité, Internet)',
     canal_sat: 'Canal+',
     common_areas: 'Parties communes',
-    cleaning: 'Nettoyage',
+    cleaning: 'Matériel de nettoyage',
     laundry: 'Blanchisserie',
     consumables: 'Consommables (Savon, Huile, etc.)',
     cleaning_material: 'Matériel de nettoyage',
@@ -640,17 +647,17 @@ export function generateIncomeStatementHTML(
       color:var(--text-main);
       background:#fff;
       margin:0;
-      padding:40px;
+      padding:${useLandscape ? '15px' : '20px'};
       display:flex;
       justify-content:center;
     }
     .report-container{ width:100%; max-width:980px; }
-    header{ text-align:center; margin-bottom:40px; }
-    h1{ font-weight:400; font-size:24px; margin:0 0 8px; letter-spacing:.5px; }
-    .report-type{ font-weight:700; font-size:16px; margin-bottom:6px; }
-    .report-date{ color:var(--text-light); font-size:14px; }
+    header{ text-align:center; margin-bottom:${useLandscape ? '15px' : '30px'}; }
+    h1{ font-weight:400; font-size:${useLandscape ? '20px' : '26px'}; margin:0 0 8px; letter-spacing:.5px; }
+    .report-type{ font-weight:700; font-size:${useLandscape ? '14px' : '18px'}; margin-bottom:6px; }
+    .report-date{ color:var(--text-light); font-size:${useLandscape ? '12px' : '15px'}; }
 
-    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    table{ width:100%; border-collapse:collapse; font-size:${useLandscape ? '9px' : '14px'}; }
     thead tr:first-child th{
       border-top:1.5px solid var(--black);
       padding-top:18px;
@@ -658,18 +665,19 @@ export function generateIncomeStatementHTML(
     th{
       text-align:right;
       font-weight:700;
-      padding:${useLandscape ? '6px 4px' : '10px 6px'};
+      padding:${useLandscape ? '6px 4px' : '12px 8px'};
       text-transform:uppercase;
-      font-size:${useLandscape ? '9px' : '11px'};
+      font-size:${useLandscape ? '9px' : '13px'};
       letter-spacing:1px;
       color:var(--text-light);
     }
     th:first-child{ text-align:left; width:${useLandscape ? '25%' : '40%'}; }
 
     td{
-      padding:${useLandscape ? '4px 3px' : '8px 6px'};
+      padding:${useLandscape ? '4px 3px' : '10px 8px'};
       border-bottom:.5px solid transparent;
       vertical-align:top;
+      font-size:${useLandscape ? '9px' : '14px'};
     }
     td:not(:first-child){
       text-align:right;
@@ -686,11 +694,11 @@ export function generateIncomeStatementHTML(
       letter-spacing:.2px;
     }
     .parent-row td:first-child{ padding-left:${useLandscape ? '12px' : '18px'}; }
-    .child-row td:first-child{ padding-left:${useLandscape ? '24px' : '38px'}; color:var(--text-light); font-size:${useLandscape ? '9px' : '12px'}; }
+    .child-row td:first-child{ padding-left:${useLandscape ? '24px' : '38px'}; color:var(--text-light); font-size:${useLandscape ? '9px' : '14px'}; }
 
     .kpi-row td{
-      color:var(--text-light);
-      font-size:${useLandscape ? '9px' : '12px'};
+      color:var(--text-main);
+      font-size:${useLandscape ? '9px' : '14px'};
       padding-top:${useLandscape ? '4px' : '6px'};
       padding-bottom:${useLandscape ? '4px' : '6px'};
     }
@@ -740,7 +748,8 @@ export function generateIncomeStatementHTML(
     th{ padding:5px 3px; font-size:8px; }
     td{ padding:3px 2px; }
     .child-row td:first-child{ padding-left:20px; font-size:8px; }
-    .kpi-row td{ font-size:8px; padding-top:3px; padding-bottom:3px; }
+    .kpi-row td{ font-size:9px; padding-top:3px; padding-bottom:3px; color:var(--text-main); }
+    .kpi-row td:first-child{ color:var(--text-main); }
     .group-row td{ padding-top:10px; }
     ` : ''}
   </style>
@@ -828,6 +837,12 @@ export function generateIncomeStatementHTML(
           <td>${formatAmount(data.fixedCosts.commonAreas.reduce((a, b) => a + b, 0))}</td>
           ${comparisonType === 'lastYear' ? '<td>—</td><td>—</td><td>—</td><td>—</td>' : ''}
         </tr>
+        <tr class="parent-row">
+          <td>Internet</td>
+          <td>${data.fixedCosts.internet.map(formatAmount).join('</td><td>')}</td>
+          <td>${formatAmount(data.fixedCosts.internet.reduce((a, b) => a + b, 0))}</td>
+          ${comparisonType === 'lastYear' ? '<td>—</td><td>—</td><td>—</td><td>—</td>' : ''}
+        </tr>
         <tr class="subtotal-row">
           <td>Total Coûts Fixes</td>
           <td>${data.fixedCosts.total.map(formatAmount).join('</td><td>')}</td>
@@ -856,19 +871,13 @@ export function generateIncomeStatementHTML(
           <td colspan="${colspan}">Coûts opérationnels</td>
         </tr>`;
   
-  // Utilities with breakdown
+  // Utilities with breakdown (Internet moved to fixed costs)
   if (data.operationalCosts.categoriesToInclude.some(c => c.key === 'utilities')) {
     html += `
         <tr class="parent-row">
           <td>${getCategoryLabel('utilities')}</td>
           <td>${data.operationalCosts.utilities.map(formatAmount).join('</td><td>')}</td>
           <td>${formatAmount(data.operationalCosts.utilities.reduce((a, b) => a + b, 0))}</td>
-          ${comparisonType === 'lastYear' ? '<td>—</td><td>—</td><td>—</td><td>—</td>' : ''}
-        </tr>
-        <tr class="child-row">
-          <td>Internet</td>
-          <td>${data.operationalCosts.utilitiesInternet.map(formatAmount).join('</td><td>')}</td>
-          <td>${formatAmount(data.operationalCosts.utilitiesInternet.reduce((a, b) => a + b, 0))}</td>
           ${comparisonType === 'lastYear' ? '<td>—</td><td>—</td><td>—</td><td>—</td>' : ''}
         </tr>
         <tr class="child-row">

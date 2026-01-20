@@ -100,6 +100,10 @@ const Expenses: React.FC = () => {
       if (target.tagName === 'INPUT' && target.type === 'date') {
         return;
       }
+      // Don't close if clicking on checkboxes or their labels
+      if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+        return;
+      }
       // Don't close if clicking inside the popover
       if (datePickerRef.current && !datePickerRef.current.contains(target)) {
         setShowDatePicker(false);
@@ -107,7 +111,7 @@ const Expenses: React.FC = () => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(target)) {
         setShowExportMenu(false);
       }
-      // Handle category dropdown
+      // Handle category dropdown - only close if clicking outside AND not on a checkbox
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
         setShowCategoryDropdown(false);
       }
@@ -129,9 +133,11 @@ const Expenses: React.FC = () => {
     if (!expenses) return [];
 
     return expenses.filter((expense) => {
+      const searchLower = search.toLowerCase();
       const matchesSearch =
         !search ||
-        expense.description.toLowerCase().includes(search.toLowerCase());
+        expense.description.toLowerCase().includes(searchLower) ||
+        (expense.vendor && expense.vendor.toLowerCase().includes(searchLower));
       const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(expense.category);
       const matchesProperty =
         !propertyFilter ||
@@ -586,7 +592,10 @@ const Expenses: React.FC = () => {
                 )}
               </button>
               {showCategoryDropdown && (
-                <div className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                <div 
+                  className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="p-2">
                     <div className="flex items-center justify-between mb-2 px-2">
                       <span className="text-xs font-medium text-gray-700">Sélectionner les catégories</span>
@@ -603,15 +612,24 @@ const Expenses: React.FC = () => {
                     {categoryOptions.map((opt) => (
                       <label
                         key={opt.value}
+                        htmlFor={`category-checkbox-${opt.value}`}
                         className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <input
+                          id={`category-checkbox-${opt.value}`}
                           type="checkbox"
                           checked={categoryFilter.has(opt.value)}
-                          onChange={() => handleCategoryToggle(opt.value)}
-                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleCategoryToggle(opt.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
                         />
-                        <span className="text-sm text-gray-700">{opt.label}</span>
+                        <span className="text-sm text-gray-700 cursor-pointer select-none flex-1">{opt.label}</span>
                       </label>
                     ))}
                   </div>
@@ -806,7 +824,10 @@ const Expenses: React.FC = () => {
                   )}
                 </button>
                 {showCategoryDropdown && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                  <div 
+                    className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="p-2">
                       <div className="flex items-center justify-between mb-2 px-2">
                         <span className="text-xs font-medium text-gray-700">Sélectionner les catégories</span>
@@ -823,15 +844,24 @@ const Expenses: React.FC = () => {
                       {categoryOptions.map((opt) => (
                         <label
                           key={opt.value}
+                          htmlFor={`category-checkbox-mobile-${opt.value}`}
                           className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <input
+                            id={`category-checkbox-mobile-${opt.value}`}
                             type="checkbox"
                             checked={categoryFilter.has(opt.value)}
-                            onChange={() => handleCategoryToggle(opt.value)}
-                            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleCategoryToggle(opt.value);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
                           />
-                          <span className="text-sm text-gray-700">{opt.label}</span>
+                          <span className="text-sm text-gray-700 cursor-pointer select-none flex-1">{opt.label}</span>
                         </label>
                       ))}
                     </div>
