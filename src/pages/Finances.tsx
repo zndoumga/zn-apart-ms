@@ -574,12 +574,7 @@ const Finances: React.FC = () => {
     return { months, categories: Array.from(allExpenseCategories) };
   }, [filteredExpenses, chartDateRange, selectedExpenseCategories, allExpenseCategories]);
 
-
   const isLoading = loadingBookings || loadingExpenses;
-
-  if (isLoading) {
-    return <LoadingSpinner className="h-64" />;
-  }
 
   const chartPeriodOptions = [
     { value: 'last3months', label: '3 derniers mois' },
@@ -615,6 +610,11 @@ const Finances: React.FC = () => {
       ...(properties?.map((p) => ({ value: p.id, label: p.name })) || []),
     ];
   }, [properties]);
+
+  // Early return for loading state - must be after all useMemo hooks
+  if (isLoading) {
+    return <LoadingSpinner className="h-64" />;
+  }
 
   return (
     <div className="space-y-6">

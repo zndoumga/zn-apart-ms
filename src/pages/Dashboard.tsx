@@ -434,9 +434,9 @@ const Dashboard: React.FC = () => {
             {/* 6. Unresolved Requests */}
             <StatsCard
               title="Demandes non résolues"
-              value={unresolvedRequestCount?.data || 0}
+              value={unresolvedRequestCount || 0}
               icon={<MessageSquare className="w-4 h-4" />}
-              variant={unresolvedRequestCount?.data && unresolvedRequestCount.data > 0 ? 'warning' : 'default'}
+              variant={unresolvedRequestCount && unresolvedRequestCount > 0 ? 'warning' : 'default'}
             />
           </div>
         )}
