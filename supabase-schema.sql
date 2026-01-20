@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   property_id UUID REFERENCES properties(id) ON DELETE SET NULL,
   customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  booking_number VARCHAR(20),
   guest_name VARCHAR(255) NOT NULL,
   guest_email VARCHAR(255),
   guest_phone VARCHAR(50),

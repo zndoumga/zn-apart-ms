@@ -14,9 +14,11 @@ import StatsCard from '../components/dashboard/StatsCard';
 import UpcomingCheckIns from '../components/dashboard/UpcomingCheckIns';
 import BookingCalendar from '../components/bookings/BookingCalendar';
 import BookingDetailsModal from '../components/bookings/BookingDetailsModal';
+import BookingForm from '../components/bookings/BookingForm';
+import Modal from '../components/ui/Modal';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { useBookings } from '../hooks/useBookings';
+import { useBookings, useCreateBooking } from '../hooks/useBookings';
 import { useExpenses } from '../hooks/useExpenses';
 import { useTaskCounts } from '../hooks/useTasks';
 import { useUnresolvedRequestCount } from '../hooks/useRequests';
@@ -47,11 +49,16 @@ const Dashboard: React.FC = () => {
   
   // Booking details modal state
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
+  
+  // Booking form modal state
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [selectedCheckInDate, setSelectedCheckInDate] = useState<Date | null>(null);
 
   // Fetch data
   const { data: bookings } = useBookings();
   const { data: expenses } = useExpenses();
   const { data: properties } = useProperties(true);
+  const createBooking = useCreateBooking();
 
   // Set default property "Nvlle Route Omnisport A1" when properties are loaded
   React.useEffect(() => {
@@ -138,6 +145,24 @@ const Dashboard: React.FC = () => {
   // Handler for viewing booking from calendar
   const handleViewBooking = (booking: Booking) => {
     setViewingBooking(booking);
+  };
+
+  // Handler for date click - open new booking form
+  const handleDateClick = (date: Date) => {
+    setSelectedCheckInDate(date);
+    setShowBookingForm(true);
+  };
+
+  // Handler for creating new booking
+  const handleCreateBooking = async (data: any) => {
+    try {
+      await createBooking.mutateAsync(data);
+      setShowBookingForm(false);
+      setSelectedCheckInDate(null);
+    } catch (err) {
+      // Error is already handled by the mutation's onError
+      console.error('Failed to create booking:', err);
+    }
   };
 
   // Handler for editing booking (navigate to bookings page)
@@ -426,6 +451,7 @@ const Dashboard: React.FC = () => {
               currentDate={selectedMonth}
               onDateChange={setSelectedMonth}
               onBookingClick={handleViewBooking}
+              onDateClick={handleDateClick}
               propertyFilter={selectedProperty}
             />
           ) : (
@@ -438,6 +464,7 @@ const Dashboard: React.FC = () => {
                   currentDate={selectedMonth}
                   onDateChange={setSelectedMonth}
                   onBookingClick={handleViewBooking}
+                  onDateClick={handleDateClick}
                   propertyFilter={selectedProperty}
                 />
               </CardBody>
@@ -462,6 +489,30 @@ const Dashboard: React.FC = () => {
         isAdmin={isAdmin}
         formatAmount={formatAmount}
       />
+
+      {/* New Booking Form Modal */}
+      {showBookingForm && (
+        <Modal
+          isOpen={showBookingForm}
+          onClose={() => {
+            setShowBookingForm(false);
+            setSelectedCheckInDate(null);
+          }}
+          title="Nouvelle réservation"
+          size="lg"
+        >
+          <BookingForm
+            onSubmit={handleCreateBooking}
+            onCancel={() => {
+              setShowBookingForm(false);
+              setSelectedCheckInDate(null);
+            }}
+            initialData={undefined}
+            defaultCheckInDate={selectedCheckInDate ? format(selectedCheckInDate, 'yyyy-MM-dd') : undefined}
+            isLoading={createBooking.isPending}
+          />
+        </Modal>
+      )}
 
     </div>
   );

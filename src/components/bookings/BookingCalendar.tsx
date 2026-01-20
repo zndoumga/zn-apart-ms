@@ -27,6 +27,7 @@ import Button from '../ui/Button';
 
 interface BookingCalendarProps {
   onBookingClick?: (booking: Booking) => void;
+  onDateClick?: (date: Date) => void;
   currentDate?: Date;
   onDateChange?: (date: Date) => void;
   propertyFilter?: string;
@@ -45,7 +46,8 @@ const PROPERTY_COLORS = [
 ];
 
 const BookingCalendar: React.FC<BookingCalendarProps> = ({ 
-  onBookingClick, 
+  onBookingClick,
+  onDateClick,
   currentDate: externalCurrentDate,
   onDateChange,
   propertyFilter: externalPropertyFilter
@@ -265,10 +267,12 @@ const BookingCalendar: React.FC<BookingCalendarProps> = ({
                   return (
                     <div
                       key={day.toISOString()}
+                      onClick={() => onDateClick?.(day)}
                       className={clsx(
-                        'min-h-[100px] p-2 border-r border-gray-100',
+                        'min-h-[100px] p-2 border-r border-gray-100 transition-colors',
                         !isCurrentMonth && 'bg-gray-50',
-                        dayIndex === 6 && 'border-r-0'
+                        dayIndex === 6 && 'border-r-0',
+                        onDateClick && 'cursor-pointer hover:bg-gray-50'
                       )}
                     >
                       <div
@@ -311,7 +315,10 @@ const BookingCalendar: React.FC<BookingCalendarProps> = ({
                             left: `${left}%`,
                             width: `${width}%`,
                           }}
-                          onClick={() => onBookingClick?.(booking)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onBookingClick?.(booking);
+                          }}
                           title={`${booking.guestName} - ${format(new Date(booking.checkIn), 'dd/MM')} au ${format(new Date(booking.checkOut), 'dd/MM')}`}
                         >
                           {isStart && (

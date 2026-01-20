@@ -48,8 +48,8 @@ export function useUpcomingCheckIns() {
           const hasValidStatus = validStatuses.includes(b.status);
           return isFutureOrToday && hasValidStatus;
         })
-        .sort((a: Booking, b: Booking) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime())
-        .slice(0, 5); // Return only the next 5 reservations
+        .sort((a: Booking, b: Booking) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
+        // Return all upcoming reservations (no limit)
     },
   });
 }
@@ -72,9 +72,10 @@ export function useCreateBooking() {
       queryClient.invalidateQueries({ queryKey: BOOKINGS_QUERY_KEY });
       success('Réservation créée', 'La réservation a été enregistrée avec succès.');
     },
-    onError: (err) => {
-      error('Erreur', 'Impossible de créer la réservation.');
-      console.error(err);
+    onError: (err: any) => {
+      const errorMessage = err?.message || err?.error?.message || 'Impossible de créer la réservation.';
+      error('Erreur', errorMessage);
+      console.error('Error creating booking:', err);
     },
   });
 }

@@ -49,12 +49,12 @@ async function autoUpdateCheckedOutBookings(): Promise<void> {
  * This is a migration function that should be called when needed
  */
 export async function assignBookingNumbersToExisting(): Promise<void> {
-  // Get all bookings without booking numbers, ordered by creation date
+  // Get all bookings without booking numbers, ordered by check-in date
   const { data: bookingsWithoutNumbers, error } = await supabase
     .from(TABLES.BOOKINGS)
-    .select('id, created_at')
+    .select('id, check_in')
     .or('booking_number.is.null,booking_number.eq.')
-    .order('created_at', { ascending: true });
+    .order('check_in', { ascending: true });
 
   if (error) {
     console.error('Error fetching bookings without numbers:', error);
@@ -69,7 +69,7 @@ export async function assignBookingNumbersToExisting(): Promise<void> {
   const bookingsByYear = new Map<number, typeof bookingsWithoutNumbers>();
   
   bookingsWithoutNumbers.forEach(booking => {
-    const year = new Date(booking.created_at as string).getFullYear();
+    const year = new Date(booking.check_in as string).getFullYear();
     if (!bookingsByYear.has(year)) {
       bookingsByYear.set(year, []);
     }
@@ -83,10 +83,10 @@ export async function assignBookingNumbersToExisting(): Promise<void> {
     // Get all bookings for this year to find max number
     const { data: allBookings, error: fetchError } = await supabase
       .from(TABLES.BOOKINGS)
-      .select('booking_number, created_at')
-      .gte('created_at', `${year}-01-01`)
-      .lt('created_at', `${year + 1}-01-01`)
-      .order('created_at', { ascending: true });
+      .select('booking_number, check_in')
+      .gte('check_in', `${year}-01-01`)
+      .lt('check_in', `${year + 1}-01-01`)
+      .order('check_in', { ascending: true });
 
     if (fetchError) {
       console.error(`Error fetching bookings for year ${year}:`, fetchError);
@@ -294,11 +294,23 @@ export async function createBooking(
     }
   }
 
-  // Generate booking number based on current date
-  const bookingNumber = await generateBookingNumber(new Date());
+  // Try to generate booking number, but don't fail if column doesn't exist
+  // Use current date (creation date) for booking number generation
+  // This ensures sequential numbering based on when bookings are created, not check-in date
+  let bookingNumber: string | undefined;
+  try {
+    bookingNumber = await generateBookingNumber(new Date());
+  } catch (error) {
+    // Check if error is specifically about missing column
+    if (error instanceof Error && error.message === 'BOOKING_NUMBER_COLUMN_NOT_EXISTS') {
+      console.warn('booking_number column does not exist yet, creating booking without number');
+    } else {
+      console.warn('Could not generate booking number:', error);
+    }
+    // Continue without booking number - it can be assigned later
+  }
 
-  const bookingData = {
-    booking_number: bookingNumber,
+  const bookingData: Record<string, any> = {
     property_id: formData.propertyId,
     customer_id: customerId || null,
     guest_name: formData.guestName,
@@ -319,6 +331,11 @@ export async function createBooking(
     payment_status: formData.paymentStatus || 'pending',
   };
 
+  // Only include booking_number if it was successfully generated
+  if (bookingNumber) {
+    bookingData.booking_number = bookingNumber;
+  }
+
   const { data, error } = await supabase
     .from(TABLES.BOOKINGS)
     .insert(bookingData)
@@ -326,6 +343,25 @@ export async function createBooking(
     .single();
 
   if (error) {
+    // If error is about booking_number column, try again without it
+    if (error.message?.includes('booking_number') || error.message?.includes('column')) {
+      console.warn('Retrying booking creation without booking_number:', error.message);
+      delete bookingData.booking_number;
+      
+      const { data: retryData, error: retryError } = await supabase
+        .from(TABLES.BOOKINGS)
+        .insert(bookingData)
+        .select()
+        .single();
+
+      if (retryError) {
+        console.error('Error creating booking:', retryError);
+        throw retryError;
+      }
+
+      return mapBookingFromDB(retryData);
+    }
+    
     console.error('Error creating booking:', error);
     throw error;
   }
@@ -493,12 +529,9 @@ export async function bulkCreateBookings(
   
   for (let i = 0; i < sortedData.length; i++) {
     const formData = sortedData[i];
-    // Use check-in date for booking number generation, or current date if check-in is in the future
-    const dateForNumber = new Date(formData.checkIn) > currentDate 
-      ? new Date(formData.checkIn) 
-      : currentDate;
-    
-    const bookingNumber = await generateBookingNumber(dateForNumber);
+    // Use current date (creation date) for booking number generation
+    // This ensures sequential numbering based on when bookings are created
+    const bookingNumber = await generateBookingNumber(currentDate);
     
     insertData.push({
       booking_number: bookingNumber,
@@ -550,23 +583,28 @@ export async function bulkCreateBookings(
 
 /**
  * Generate booking number in format: XXXX-YY (e.g., 0001-26)
- * Sequential by year based on creation date
- * Numbers are assigned based on chronological order of creation
+ * Sequential by year - finds the highest existing booking number for the current year
+ * and increments by 1, regardless of check-in date or creation date
+ * Resets to 0001 when the year changes
  */
 export async function generateBookingNumber(createdAt: Date): Promise<string> {
   const year = createdAt.getFullYear();
   const yearShort = year.toString().substring(2);
   
-  // Get ALL bookings for this year (including deleted) to ensure proper sequential numbering
-  // Order by created_at to maintain chronological order
+  // Get ALL bookings with booking numbers (excluding deleted) to find the highest number
+  // We look at all bookings, not filtered by creation date, to find the max number for this year suffix
   const { data: bookings, error } = await supabase
     .from(TABLES.BOOKINGS)
-    .select('booking_number, created_at')
-    .gte('created_at', `${year}-01-01T00:00:00.000Z`)
-    .lt('created_at', `${year + 1}-01-01T00:00:00.000Z`)
-    .order('created_at', { ascending: true });
+    .select('booking_number')
+    .neq('is_deleted', true)
+    .not('booking_number', 'is', null);
 
   if (error) {
+    // Check if error is about missing booking_number column
+    if (error.message?.includes('booking_number') || error.message?.includes('column') || error.message?.includes('schema cache')) {
+      console.warn('booking_number column does not exist yet, cannot generate booking number');
+      throw new Error('BOOKING_NUMBER_COLUMN_NOT_EXISTS');
+    }
     console.error('Error fetching bookings for number generation:', error);
     // Fallback: use timestamp-based number
     const timestamp = Date.now();
@@ -574,17 +612,19 @@ export async function generateBookingNumber(createdAt: Date): Promise<string> {
     return `${fallbackNumber}-${yearShort}`;
   }
 
-  // Find the highest booking number for this year
-  // This ensures we continue from the last assigned number
+  // Find the highest booking number for this year suffix (e.g., -26 for 2026)
+  // Look at ALL bookings, regardless of when they were created or check-in date
   let maxNumber = 0;
   if (bookings && bookings.length > 0) {
     bookings.forEach(booking => {
       if (booking.booking_number) {
         // Match pattern: XXXX-YY (e.g., 0001-26)
-        const match = booking.booking_number.match(/^(\d{4})-\d{2}$/);
+        const match = booking.booking_number.match(/^(\d{4})-(\d{2})$/);
         if (match) {
           const num = parseInt(match[1], 10);
-          if (num > maxNumber) {
+          const bookingYear = match[2];
+          // Only consider booking numbers that match the current year suffix
+          if (bookingYear === yearShort && num > maxNumber) {
             maxNumber = num;
           }
         }
@@ -592,7 +632,7 @@ export async function generateBookingNumber(createdAt: Date): Promise<string> {
     });
   }
 
-  // Generate next booking number - sequential
+  // Generate next booking number - sequential, incrementing from the highest existing number
   const nextNumber = (maxNumber + 1).toString().padStart(4, '0');
   return `${nextNumber}-${yearShort}`;
 }

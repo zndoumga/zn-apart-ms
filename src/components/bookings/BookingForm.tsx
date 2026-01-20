@@ -41,6 +41,7 @@ type BookingFormValues = z.infer<typeof bookingSchema>;
 interface BookingFormProps {
   onSubmit: (data: BookingFormData) => void;
   initialData?: Booking;
+  defaultCheckInDate?: string;
   isLoading?: boolean;
   onCancel?: () => void;
 }
@@ -50,6 +51,7 @@ type InputCurrency = 'EUR' | 'FCFA';
 const BookingForm: React.FC<BookingFormProps> = ({
   onSubmit,
   initialData,
+  defaultCheckInDate,
   isLoading,
   onCancel,
 }) => {
@@ -102,7 +104,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
           customerId: undefined,
           guestEmail: undefined,
           guestPhone: undefined,
-          checkIn: formatForInput(new Date()),
+          checkIn: defaultCheckInDate || formatForInput(new Date()),
           checkOut: '',
           guests: 2,
           totalPriceEUR: 0,
@@ -281,18 +283,38 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
   // Handle EUR input change
   const handleEURChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const eurValue = parseFloat(e.target.value) || 0;
-    setLastChangedField('totalPrice');
-    setValue('totalPriceEUR', eurValue);
-    setValue('totalPriceFCFA', Math.round(eurValue * exchangeRate));
+    const inputValue = e.target.value;
+    // Allow empty input while typing
+    if (inputValue === '') {
+      setValue('totalPriceEUR', 0, { shouldValidate: false });
+      setValue('totalPriceFCFA', 0, { shouldValidate: false });
+      setLastChangedField('totalPrice');
+      return;
+    }
+    const eurValue = parseFloat(inputValue);
+    if (!isNaN(eurValue) && eurValue >= 0) {
+      setLastChangedField('totalPrice');
+      setValue('totalPriceEUR', eurValue, { shouldValidate: true });
+      setValue('totalPriceFCFA', Math.round(eurValue * exchangeRate), { shouldValidate: false });
+    }
   };
 
   // Handle FCFA input change
   const handleFCFAChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fcfaValue = parseFloat(e.target.value) || 0;
-    setLastChangedField('totalPrice');
-    setValue('totalPriceFCFA', fcfaValue);
-    setValue('totalPriceEUR', Math.round((fcfaValue / exchangeRate) * 100) / 100);
+    const inputValue = e.target.value;
+    // Allow empty input while typing
+    if (inputValue === '') {
+      setValue('totalPriceFCFA', 0, { shouldValidate: false });
+      setValue('totalPriceEUR', 0, { shouldValidate: false });
+      setLastChangedField('totalPrice');
+      return;
+    }
+    const fcfaValue = parseFloat(inputValue);
+    if (!isNaN(fcfaValue) && fcfaValue >= 0) {
+      setLastChangedField('totalPrice');
+      setValue('totalPriceFCFA', fcfaValue, { shouldValidate: true });
+      setValue('totalPriceEUR', parseFloat((fcfaValue / exchangeRate).toFixed(2)), { shouldValidate: false });
+    }
   };
 
   const propertyOptions =
@@ -311,8 +333,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
       checkIn: data.checkIn,
       checkOut: data.checkOut,
       guests: data.guests,
-      totalPriceEUR: data.totalPriceEUR,
-      totalPriceFCFA: data.totalPriceFCFA,
+      totalPriceEUR: data.totalPriceEUR || 0,
+      totalPriceFCFA: data.totalPriceFCFA || 0,
       source: data.source,
       status: data.status,
       paymentStatus: data.paymentStatus || 'pending',
@@ -715,7 +737,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
           </Button>
         )}
         <Button type="submit" isLoading={isLoading}>
-          {initialData ? 'Mettre à jour' : 'Créer la réservation'}
+          {initialData?.id ? 'Mettre à jour' : 'Créer la réservation'}
         </Button>
       </div>
     </form>

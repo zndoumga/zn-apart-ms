@@ -84,7 +84,11 @@ const UpcomingCheckIns: React.FC = () => {
       >
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Arrivées à venir</h3>
-          <p className="text-sm text-gray-500 mt-0.5">5 prochaines réservations</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {bookings && bookings.length > 0 
+              ? `${bookings.length} réservation${bookings.length > 1 ? 's' : ''}`
+              : 'Aucune réservation'}
+          </p>
         </div>
       </CardHeader>
       <CardBody noPadding>
@@ -95,7 +99,7 @@ const UpcomingCheckIns: React.FC = () => {
             icon={<Calendar className="w-8 h-8 text-gray-400" />}
           />
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
             {bookings.map((booking) => (
               <div
                 key={booking.id}
